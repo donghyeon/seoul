@@ -12,5 +12,5 @@ Download and unzip files. You can find a few auxiliary functions to manage datas
 or just read pickled data [df\_pm.pickle](https://goo.gl/QYfZDH)
 to reduce loading times.
 
-A simple LSTM experiments are added.
+A simple LSTM experiment tool is added.
 Just run [seoul\_lstm.py](https://github.com/donghyeon/seoul/blob/master/seoul_lstm.py).
