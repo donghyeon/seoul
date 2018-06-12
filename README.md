@@ -9,8 +9,8 @@ Airkorea PM dataset:
 
 Download and unzip files. You can find a few auxiliary functions to manage dataset in
 [read\_and\_preprocess\_pm.py](https://github.com/donghyeon/seoul/blob/master/read_and_preprocess_pm.py),
-or just read pickled data[df\_pm.pickle](https://goo.gl/QYfZDH)
+or just read pickled data [df\_pm.pickle](https://goo.gl/QYfZDH)
 to reduce loading times.
 
 A simple LSTM experiments are added.
-Just run [seoul\_lstm.py](https://github.com/donghyeon/seoul/blob/master/seoul_lstm.py)
+Just run [seoul\_lstm.py](https://github.com/donghyeon/seoul/blob/master/seoul_lstm.py).
