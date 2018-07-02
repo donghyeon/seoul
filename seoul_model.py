@@ -34,7 +34,7 @@ def simple_lstm(features, labels, mode, params):
             predictions['pm_prediction'] = pm_prediction
             return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
-        loss = tf.losses.mean_squared_error(labels=targets, predictions=pm_prediction)
+        loss = tf.losses.absolute_difference(labels=targets, predictions=pm_prediction)
 
         logging_hook = tf.train.LoggingTensorHook({"loss": loss}, every_n_iter=100)
 
