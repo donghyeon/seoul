@@ -14,3 +14,6 @@ to reduce loading times.
 
 A simple LSTM experiment tool is added.
 Just run [seoul\_lstm.py](https://github.com/donghyeon/seoul/blob/master/seoul_lstm.py).
+
+Implementation of seq2seq learning is not completed, but experiments will work for now.
+Just change the model function of the estimator and set hyper-parameters properly.

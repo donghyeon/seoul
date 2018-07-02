@@ -83,18 +83,18 @@ def preprocess_pm(df_pm, target_dict):
     exclude_keys = ['지역', '측정소명', '주소']
     df_pm = df_pm.drop(columns=exclude_keys)
 
-    # Get label_keys and max_hour from target_dict
+    # Get label_keys and target_max_hour from target_dict
     label_keys = []
-    max_hour = 0
+    target_max_hour = 0
     for target_column in target_dict:
         for hour in target_dict[target_column]:
             target_key = '%s_%dh' % (target_column, hour)
             label_keys.append(target_key)
-            max_hour = max(hour, max_hour)
+            target_max_hour = max(hour, target_max_hour)
 
     # Drop non accessible future labels (NaNs)
     date_index = df_pm.index.get_level_values('측정일시').unique()
-    df_pm = df_pm.drop(date_index[-max_hour:], level='측정일시')
+    df_pm = df_pm.drop(date_index[-target_max_hour:], level='측정일시')
 
     # Split the data into features and labels
     df_features = df_pm.drop(columns=label_keys)
