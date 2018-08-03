@@ -1,7 +1,5 @@
-import pandas as pd
 import numpy as np
-import tensorflow as tf
-
+import pandas as pd
 import os
 
 
@@ -156,6 +154,8 @@ def make_target_values(df_pm, target_pm):
                 idx_slicer = pd.IndexSlice
                 label_column = target_pm.get_label_column_name(key, hour)
                 df_pm.loc[idx_slicer[code, :], label_column] = new_target.values
+
+    df_pm = convert_dtype_for_numeric_columns(df_pm, np.float32)
     return df_pm
 
 
@@ -182,41 +182,6 @@ def preprocess_pm(df_pm, target_pm):
 
     return df_pm, df_features, df_labels
 
-
-def prepare_tf_dataset(df_features, df_labels):
-    features = _cast_dataframe_to_dict(df_features)
-    features_mean = df_features.mean()
-    features_stddev = df_features.std()
-    labels = _cast_dataframe_to_dict(df_labels)
-
-    feature_columns = [tf.contrib.feature_column.sequence_numeric_column(
-        column_name, normalizer_fn=lambda x: standardize(x, features_mean[column_name], features_stddev[column_name]))
-        for column_name in df_features]
-
-    label_columns = []
-    for column_name in df_labels:
-        key, _ = TargetPM.get_key_hour_from_column_name(column_name)
-        label_columns.append(tf.contrib.feature_column.sequence_numeric_column(
-            column_name, normalizer_fn=lambda x: standardize(x, features_mean[key], features_stddev[key])))
-    # label data for Seoul should be normalized by original feature columns
-
-    return features, labels, feature_columns, label_columns
-
-
-def _cast_dataframe_to_dict(dataframe):
-    casted_dict = dict(dataframe)
-    for key in casted_dict:
-        series = casted_dict[key]
-        if isinstance(series.index, pd.MultiIndex):
-            casted_dict[key] = _cast_multi_index_series_to_array(series)
-    return casted_dict
-
-
-def _cast_multi_index_series_to_array(multi_index_series, out_shape=None):
-    if out_shape is None:
-        out_shape = [len(multi_index_series.index.get_level_values(name).unique())
-                     for name in multi_index_series.index.names]
-    return multi_index_series.values.reshape(out_shape)
 
 
 def treat_nan_by_mask(pm_tensor):
@@ -252,13 +217,6 @@ def get_statistics_for_standardization(dataset):
     """
     return dataset.mean(), dataset.std()
 
-
-def standardize(dataset, mean, stddev):
-    return (dataset - mean) / stddev
-
-
-def inverse_standardize(standardized_dataset, mean, stddev):
-    return standardized_dataset * stddev + mean
 
 
 def convert_dtype_for_numeric_columns(dataframe, dtype):

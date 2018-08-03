@@ -108,7 +108,7 @@ def seq2seq(features, labels, mode, params):
 
         if mode == tf.estimator.ModeKeys.TRAIN:
             # axis=1 means the axis of sequence_length
-            training_helper_inputs = tf.concat((tf.expand_dims(start_tokens, axis=1), targets), axis=1)
+            training_helper_inputs = tf.concat((tf.expand_dims(start_tokens, axis=1), targets[:, :-1]), axis=1)
             helper = tf.contrib.seq2seq.TrainingHelper(training_helper_inputs, targets_sequence_length)
 
         elif mode == tf.estimator.ModeKeys.PREDICT:

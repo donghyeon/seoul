@@ -8,8 +8,9 @@ import tensorflow as tf
 
 import read_and_preprocess_pm
 from read_and_preprocess_pm import TargetPM
+import seoul_input
 import seoul_model
-import sliding_window_input
+
 
 # Load raw data
 # df_pm = read_and_preprocess_pm.read_pm_dataset('/home/donghyeon/disk1/dataset/seoul/airkorea')
@@ -24,14 +25,15 @@ df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 # Make output values to predict
 target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [3, 6, 12, 24])
 df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
-df_pm = read_and_preprocess_pm.convert_dtype_for_numeric_columns(df_pm, np.float32)
 
+# Preprocess dataframes
 df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, target_pm)
 
 # TODO: Split train/val/test data
 
+
 # Prepare tensorflow dataset
-features, labels, feature_columns, label_columns = read_and_preprocess_pm.prepare_tf_dataset(df_features, df_labels)
+features, labels, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features, df_labels)
 
 
 # TODO: Add an argument parser
@@ -95,5 +97,5 @@ with open(exp_configs_filename, 'w') as f:
     json.dump(exp_configs, f)
 
 # Let's train!
-seoul_regressor.train(input_fn=lambda: sliding_window_input.my_input_fn(
+seoul_regressor.train(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features, labels, window_size, batch_size))
