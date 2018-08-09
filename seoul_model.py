@@ -5,6 +5,7 @@
 # TODO: Write an encoder model function to combine encoder part of simple_lstm and seq2seq models
 
 import tensorflow as tf
+import numpy as np
 
 
 def simple_lstm(features, labels, mode, params):
@@ -25,7 +26,7 @@ def simple_lstm(features, labels, mode, params):
     targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
     targets = targets[:, -1]  # Discard values except for the last time step
 
-    with tf.variable_scope('pm_regression', reuse=tf.AUTO_REUSE) as vs:
+    with tf.variable_scope('pm_regression') as vs:
         # create stacked LSTMCells
         rnn_layers = [tf.nn.rnn_cell.LSTMCell(size) for size in params['num_encoder_states']]
 
@@ -35,28 +36,48 @@ def simple_lstm(features, labels, mode, params):
         outputs, state = tf.nn.dynamic_rnn(
             multi_rnn_cell, inputs, dtype=tf.float32)
         outputs = outputs[:, -1]  # Discard values except for the last time step
+        outputs = tf.layers.dense(outputs, output_dim, kernel_initializer=tf.glorot_uniform_initializer())
 
-        outputs = tf.layers.dense(outputs, output_dim)
         predictions = {}
         for i, column in enumerate(label_columns):
             key, _ = target_pm.get_key_hour_from_column_name(column.name)
             mean = features_mean[key]
             stddev = features_stddev[key]
-            predictions[column.name] = _inverse_standardize(outputs[..., i], mean, stddev)
+            predictions[column.name] = _inverse_standardize(outputs[:, i], mean, stddev)
 
         if mode == tf.estimator.ModeKeys.PREDICT:
             return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
+        loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
+
+        errors = {}
+        eval_metric_ops = {}
+        # errors of all label columns
+        for i, column in enumerate(label_columns):
+            column_name = column.name
+            key, hour = target_pm.get_key_hour_from_column_name(column_name)
+            errors[column_name] = _compute_mean_absolute_error(
+                labels=labels[column_name][:, -1], predictions=predictions[column_name])
+            eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
+                labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            return tf.estimator.EstimatorSpec(mode, loss=loss)
+            return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops)
 
         # mode for tf.estimator.ModeKeys.TRAIN
+        learning_rate = tf.train.exponential_decay(learning_rate, tf.train.get_global_step(), decay_steps=1000,
+                                                   decay_rate=0.96, staircase=True)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
-        logging_hook = tf.train.LoggingTensorHook({"loss": loss}, every_n_iter=100)
-        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+
+        # gradient clipping
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+        train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
+
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
+        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
+                                          eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
 
 def seq2seq(features, labels, mode, params):
@@ -86,10 +107,10 @@ def seq2seq(features, labels, mode, params):
     # batch_size can vary
     batch_size = tf.shape(inputs)[0]
 
-    with tf.variable_scope('pm_regression', reuse=tf.AUTO_REUSE) as vs:
+    with tf.variable_scope('pm_regression') as vs:
         # Implementation of encoder
         # create stacked LSTMCells
-        rnn_layers = [tf.nn.rnn_cell.LSTMCell(size) for size in params['num_encoder_states']]
+        rnn_layers = [tf.nn.rnn_cell.BasicLSTMCell(size) for size in params['num_encoder_states']]
 
         # create a RNN cell composed sequentially of a number of RNNCells
         multi_rnn_cell = tf.nn.rnn_cell.MultiRNNCell(rnn_layers)
@@ -98,8 +119,9 @@ def seq2seq(features, labels, mode, params):
         # inputs : [batch, length, depth]
 
         # Implementation of decoder with attention wrapper
-        attention_cell = tf.nn.rnn_cell.BasicLSTMCell(params['num_decoder_states'])
-        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(params['num_decoder_states'], encoder_outputs)
+        attention_cell = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.BasicLSTMCell(size)
+                                                      for size in params['num_decoder_states']])
+        attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attention_cell.output_size, encoder_outputs)
         decoder_cell = tf.contrib.seq2seq.AttentionWrapper(attention_cell, attention_mechanism)
 
         # start tokens like a <GO> symbol
@@ -121,7 +143,9 @@ def seq2seq(features, labels, mode, params):
         decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                   helper,
                                                   decoder_cell.zero_state(batch_size, tf.float32),
-                                                  output_layer=tf.layers.Dense(output_dim))
+                                                  output_layer=tf.layers.Dense(
+                                                      output_dim,
+                                                      kernel_initializer=tf.glorot_uniform_initializer()))
 
         (decoder_outputs, _, _) = tf.contrib.seq2seq.dynamic_decode(decoder,
                                                                     maximum_iterations=maximum_sequence_length)
@@ -133,7 +157,7 @@ def seq2seq(features, labels, mode, params):
             key = column.name
             mean = features_mean[key]
             stddev = features_stddev[key]
-            predictions[key] = _inverse_standardize(outputs[..., i], mean, stddev)
+            predictions[key] = _inverse_standardize(outputs[:, :, i], mean, stddev)
         # predictions of all label columns
         for i, column in enumerate(label_sequences_columns):
             key = column.name
@@ -147,12 +171,17 @@ def seq2seq(features, labels, mode, params):
             return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
+        loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
         errors = {}
+        eval_metric_ops = {}
         # errors of key sequences
         for i, column in enumerate(label_sequences_columns):
-            key = column.name
-            errors[key] = _compute_mean_absolute_error(labels=label_sequences[key], predictions=predictions[key])
+            column_name = column.name
+            errors[column_name] = _compute_mean_absolute_error(
+                labels=label_sequences[column_name], predictions=predictions[column_name])
+            eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
+                labels=label_sequences[column_name], predictions=predictions[column_name])
         # errors of all label columns
         for i, column in enumerate(label_sequences_columns):
             key = column.name
@@ -160,15 +189,26 @@ def seq2seq(features, labels, mode, params):
                 column_name = target_pm.get_label_column_name(key, hour)
                 errors[column_name] = _compute_mean_absolute_error(
                     labels=labels[column_name][:, -1], predictions=predictions[column_name])
+                eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
+                    labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            return tf.estimator.EstimatorSpec(mode, loss=loss)
+            return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
+                                              evaluation_hooks=[logging_hook])
 
         # mode for tf.estimator.ModeKeys.TRAIN
+        learning_rate = tf.train.exponential_decay(learning_rate, tf.train.get_global_step(), decay_steps=1000,
+                                                   decay_rate=0.96, staircase=True)
         optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        train_op = optimizer.minimize(loss, global_step=tf.train.get_global_step())
+
+        # gradient clipping
+        gradients, variables = zip(*optimizer.compute_gradients(loss))
+        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
+        train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
+
         logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
-        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op, training_hooks=[logging_hook])
+        return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
+                                          eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
 
 def _transform_labels_to_sequences(labels, target_pm, features_mean, features_stddev):
@@ -187,12 +227,24 @@ def _transform_labels_to_sequences(labels, target_pm, features_mean, features_st
 
 
 def _standardize(dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return dataset - mean
     return (dataset - mean) / stddev
 
 
 def _inverse_standardize(standardized_dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return standardized_dataset + mean
     return standardized_dataset * stddev + mean
 
 
 def _compute_mean_absolute_error(labels, predictions):
     return tf.reduce_mean(tf.abs(labels - predictions))
+
+
+def add_l2_loss(variables, scale_factor):
+    l2_loss = 0
+    for v in variables:
+        if 'bias' not in v.name.lower():
+            l2_loss += scale_factor * tf.nn.l2_loss(v)
+    return l2_loss

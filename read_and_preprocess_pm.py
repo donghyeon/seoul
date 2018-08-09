@@ -183,7 +183,6 @@ def preprocess_pm(df_pm, target_pm):
     return df_pm, df_features, df_labels
 
 
-
 def treat_nan_by_mask(pm_tensor):
     # Treatment for missing data
     nan_mask = np.isnan(pm_tensor)
@@ -216,7 +215,6 @@ def get_statistics_for_standardization(dataset):
     :return: pandas Series tuple (mean, stddev)
     """
     return dataset.mean(), dataset.std()
-
 
 
 def convert_dtype_for_numeric_columns(dataframe, dtype):

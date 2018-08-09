@@ -2,9 +2,11 @@
 
 import pandas as pd
 import tensorflow as tf
+import numpy as np
 from functools import partial
 
 from read_and_preprocess_pm import TargetPM
+from fixed_len_sequece_numeric_column import fixed_len_sequence_numeric_column
 
 
 def get_tf_sequence_feature_columns(features, normalizer_fns):
@@ -17,7 +19,9 @@ def get_tf_sequence_feature_columns(features, normalizer_fns):
     if not features.keys() == normalizer_fns.keys():
         raise Exception('Keys of features and normalizer_fns must be same.')
 
-    return [tf.contrib.feature_column.sequence_numeric_column(column_name, normalizer_fn=normalizer_fns[column_name])
+    # return [tf.contrib.feature_column.sequence_numeric_column(column_name, normalizer_fn=normalizer_fns[column_name])
+    #         for column_name in features]
+    return [fixed_len_sequence_numeric_column(column_name, normalizer_fn=normalizer_fns[column_name])
             for column_name in features]
 
 
@@ -53,7 +57,7 @@ def prepare_tf_dataset(df_features, df_labels):
         key, _ = TargetPM.get_key_hour_from_column_name(column_name)
         labels_mean[column_name] = features_mean[key]
         labels_stddev[column_name] = features_stddev[key]
-    labels_normalizer_fns = get_normalizer_fns(standardize, mean=labels_mean, stdde=labels_stddev)
+    labels_normalizer_fns = get_normalizer_fns(standardize, mean=labels_mean, stddev=labels_stddev)
 
     feature_columns = get_tf_sequence_feature_columns(features, features_normalizer_fns)
     label_columns = get_tf_sequence_feature_columns(labels, labels_normalizer_fns)
@@ -78,14 +82,18 @@ def _cast_multi_index_series_to_array(multi_index_series, out_shape=None):
 
 
 def standardize(dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return dataset - mean
     return (dataset - mean) / stddev
 
 
 def inverse_standardize(standardized_dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return standardized_dataset + mean
     return standardized_dataset * stddev + mean
 
 
-def sliding_window_input_fn(features, labels, window_size, batch_size):
+def sliding_window_input_fn(features, labels, window_size, batch_size, num_epoch):
     """
     :param features: dict of numpy array, [num_stations, time_length, num_features]
     :param labels: dict of numpy array, [num_stations, time_length, num_features]
@@ -105,4 +113,7 @@ def sliding_window_input_fn(features, labels, window_size, batch_size):
 
     dataset = tf.data.Dataset.zip((dataset_features, dataset_labels))
 
-    return dataset.shuffle(1278303).repeat(2).batch(batch_size)
+    num_station, time_length = list(features.values())[0].shape
+    num_data = num_station * (time_length - window_size + 1)
+
+    return dataset.shuffle(num_data).repeat(num_epoch).batch(batch_size)

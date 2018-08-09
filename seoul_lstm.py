@@ -18,18 +18,26 @@ import seoul_model
 # Or instead save and load pickled data
 # df_pm.to_pickle('df_pm.pickle')
 df_pm = pd.read_pickle('df_pm.pickle')
+df_pm = read_and_preprocess_pm.get_dataframe_with_complete_pm25(df_pm)
 
 # Fill proper values (by forward fill and backward fill methods) to replace missing values
 df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
 # Make output values to predict
-target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [3, 6, 12, 24])
+target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [1, 2, 4, 8])
 df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
 # Preprocess dataframes
 df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, target_pm)
 
 # TODO: Split train/val/test data
+dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
+stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
+columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])
+
+df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+df_labels = df_labels.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드')
 
 
 # Prepare tensorflow dataset
@@ -38,15 +46,16 @@ features, labels, feature_columns, label_columns = seoul_input.prepare_tf_datase
 
 # TODO: Add an argument parser
 # Set hyper-parameters for encoder
-num_encoder_states = [64, 64]
+num_encoder_states = [128]
 window_size = 24
 batch_size = 100
 
 # hyper-parameters for seq2seq
-num_decoder_states = 64
+num_decoder_states = [128]
 
 # hyper-parameters for training
-learning_rate = 0.0001
+learning_rate = 0.01
+num_epoch = 100
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -98,4 +107,4 @@ with open(exp_configs_filename, 'w') as f:
 
 # Let's train!
 seoul_regressor.train(input_fn=lambda: seoul_input.sliding_window_input_fn(
-    features, labels, window_size, batch_size))
+    features, labels, window_size, batch_size, num_epoch))
