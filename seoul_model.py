@@ -63,7 +63,9 @@ def simple_lstm(features, labels, mode, params):
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops)
+            logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
+            return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
+                                              evaluation_hooks=[logging_hook])
 
         # mode for tf.estimator.ModeKeys.TRAIN
         learning_rate = tf.train.exponential_decay(learning_rate, tf.train.get_global_step(), decay_steps=1000,
@@ -193,6 +195,7 @@ def seq2seq(features, labels, mode, params):
                     labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
+            logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
             return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
                                               evaluation_hooks=[logging_hook])
 
@@ -206,7 +209,7 @@ def seq2seq(features, labels, mode, params):
         gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
         train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1)
         return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                           eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
