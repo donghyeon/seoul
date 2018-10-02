@@ -24,7 +24,7 @@ df_pm = read_and_preprocess_pm.get_dataframe_with_complete_pm25(df_pm)
 df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
 # Make output values to predict
-target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [1, 2, 4, 8])
+target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [3, 6, 9, 12])
 df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
 # Preprocess dataframes
@@ -32,8 +32,9 @@ df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, targ
 
 # TODO: Split train/val/test data
 dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
+#dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
 stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
-columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])
+columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
 
 df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
 df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
@@ -83,14 +84,26 @@ if not os.path.exists(os.path.join(model_dir, exp_prefix)):
 #             'num_encoder_states': num_encoder_states,
 #             'learning_rate': learning_rate})
 
+# seoul_regressor = tf.estimator.Estimator(
+#     model_fn=seoul_model.seq2seq,
+#     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
+#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
+#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
+#             'batch_size': batch_size, 'window_size': window_size,
+#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
+#             'learning_rate': learning_rate})
+
 seoul_regressor = tf.estimator.Estimator(
-    model_fn=seoul_model.seq2seq,
+    model_fn=seoul_model.transformer,
     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
             'batch_size': batch_size, 'window_size': window_size,
             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-            'learning_rate': learning_rate})
+            'learning_rate': learning_rate,
+            'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
+            'num_heads': 8, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
+            'num_hidden_layers': 6, 'filter_size': 64})
 
 
 # TODO: Find a popular library for adjusting configs of experiments or make this as a simple tool

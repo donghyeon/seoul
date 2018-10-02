@@ -28,7 +28,7 @@ def get_tf_sequence_feature_columns(features, normalizer_fns):
 def get_normalizer_fns(normalizer_fn, **normalizer_fn_params):
     all_param_column_names = [normalizer_fn_params[param].keys() for param in normalizer_fn_params]
     if not is_all_equal(all_param_column_names):
-        raise Exception('Keys of normalizer_fn_params must be same')
+        raise Exception('Keys of normalizer_fn_params must be same.')
 
     normalizer_fns = {}
     column_names = all_param_column_names[0]
