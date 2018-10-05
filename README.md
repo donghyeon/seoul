@@ -7,13 +7,14 @@ Airkorea PM dataset:
 [2016.zip](http://www.airkorea.or.kr/file/download/?atch_id=48522)
 [2017.zip](http://www.airkorea.or.kr/file/download/?atch_id=71690)
 
+## Requirements
+[TensorFlow Official Models](https://github.com/tensorflow/models/tree/master/official)
+
+## RNN based models
 Download and unzip files. You can find a few auxiliary functions to manage dataset in
 [read\_and\_preprocess\_pm.py](https://github.com/donghyeon/seoul/blob/master/read_and_preprocess_pm.py),
 or just read pickled data [df\_pm.pickle](https://goo.gl/QYfZDH)
 to reduce loading times.
 
-A simple LSTM experiment tool is added.
-Just run [seoul\_lstm.py](https://github.com/donghyeon/seoul/blob/master/seoul_lstm.py).
-
-Implementation of seq2seq learning is not completed, but experiments will work for now.
-Just change the model function of the estimator and set hyper-parameters properly.
+Just run [seoul\_main.py](https://github.com/donghyeon/seoul/blob/master/seoul_main.py).
+You can change the model function of the estimator.
