@@ -86,26 +86,26 @@ if not os.path.exists(os.path.join(model_dir, exp_prefix)):
 #             'num_encoder_states': num_encoder_states,
 #             'learning_rate': learning_rate})
 
-# seoul_regressor = tf.estimator.Estimator(
-#     model_fn=seoul_model.seq2seq,
-#     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
-#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
-#             'batch_size': batch_size, 'window_size': window_size,
-#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-#             'learning_rate': learning_rate})
-
 seoul_regressor = tf.estimator.Estimator(
-    model_fn=seoul_model.transformer,
+    model_fn=seoul_model.seq2seq,
     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
             'batch_size': batch_size, 'window_size': window_size,
             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-            'learning_rate': learning_rate,
-            'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
-            'num_heads': 8, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
-            'num_hidden_layers': 6, 'filter_size': 64})
+            'learning_rate': learning_rate})
+
+# seoul_regressor = tf.estimator.Estimator(
+#     model_fn=seoul_model.transformer,
+#     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
+#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
+#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
+#             'batch_size': batch_size, 'window_size': window_size,
+#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
+#             'learning_rate': learning_rate,
+#             'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
+#             'num_heads': 8, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
+#             'num_hidden_layers': 6, 'filter_size': 64})
 
 
 # TODO: Find a popular library for adjusting configs of experiments or make this as a simple tool
@@ -121,5 +121,12 @@ with open(exp_configs_filename, 'w') as f:
     json.dump(exp_configs, f)
 
 # Let's train!
-seoul_regressor.train(input_fn=lambda: seoul_input.sliding_window_input_fn(
-    features, labels, window_size, batch_size, num_epoch))
+# seoul_regressor.train(input_fn=lambda: seoul_input.sliding_window_input_fn(
+#     features_train, labels_train, window_size, batch_size, num_epoch))
+
+train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
+    features_train, labels_train, window_size, batch_size, num_epoch))
+eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
+    features_eval, labels_eval, window_size, batch_size, 1))
+
+tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
