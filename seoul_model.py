@@ -114,7 +114,7 @@ def seq2seq(features, labels, mode, params):
     with tf.variable_scope('pm_regression') as vs:
         # Implementation of encoder
         # create stacked LSTMCells
-        rnn_layers = [tf.nn.rnn_cell.BasicLSTMCell(size) for size in params['num_encoder_states']]
+        rnn_layers = [tf.nn.rnn_cell.LSTMCell(size) for size in params['num_encoder_states']]
 
         # create a RNN cell composed sequentially of a number of RNNCells
         multi_rnn_cell = tf.nn.rnn_cell.MultiRNNCell(rnn_layers)
@@ -123,10 +123,11 @@ def seq2seq(features, labels, mode, params):
         # inputs : [batch, length, depth]
 
         # Implementation of decoder with attention wrapper
-        attention_cell = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.BasicLSTMCell(size)
+        attention_cell = tf.nn.rnn_cell.MultiRNNCell([tf.nn.rnn_cell.LSTMCell(size)
                                                       for size in params['num_decoder_states']])
         attention_mechanism = tf.contrib.seq2seq.BahdanauAttention(attention_cell.output_size, encoder_outputs)
-        decoder_cell = tf.contrib.seq2seq.AttentionWrapper(attention_cell, attention_mechanism)
+        decoder_cell = tf.contrib.seq2seq.AttentionWrapper(attention_cell, attention_mechanism,
+                                                           alignment_history=True)
 
         # start tokens like a <GO> symbol
         start_tokens, _ = tf.contrib.feature_column.sequence_input_layer(features, label_sequences_columns)
@@ -137,7 +138,7 @@ def seq2seq(features, labels, mode, params):
             training_helper_inputs = tf.concat((tf.expand_dims(start_tokens, axis=1), targets[:, :-1]), axis=1)
             helper = tf.contrib.seq2seq.TrainingHelper(training_helper_inputs, targets_sequence_length)
 
-        elif mode == tf.estimator.ModeKeys.PREDICT:
+        elif mode == tf.estimator.ModeKeys.PREDICT or mode == tf.estimator.ModeKeys.EVAL:
             helper = tf.contrib.seq2seq.InferenceHelper(sample_fn=tf.identity,
                                                         sample_shape=tf.TensorShape([batch_size]),
                                                         sample_dtype=tf.float32,
@@ -151,9 +152,12 @@ def seq2seq(features, labels, mode, params):
                                                       output_dim,
                                                       kernel_initializer=tf.glorot_uniform_initializer()))
 
-        (decoder_outputs, _, _) = tf.contrib.seq2seq.dynamic_decode(decoder,
-                                                                    maximum_iterations=maximum_sequence_length)
+        (decoder_outputs, decoder_state, _) = tf.contrib.seq2seq.dynamic_decode(
+            decoder, maximum_iterations=maximum_sequence_length)
         outputs = decoder_outputs.rnn_output  # Shape of [batch_size, sequence_length, feature_dim]
+        attention_outputs = decoder_state.alignment_history.stack()  # Shape of [length, batch, depth]
+        attention_outputs.set_shape(attention_outputs.get_shape().merge_with([maximum_sequence_length, None, None]))
+        attention_mean = tf.reduce_mean(attention_outputs, 1)  # Shape of [length, depth]
 
         predictions = {}
         # predictions of key sequences
@@ -180,6 +184,7 @@ def seq2seq(features, labels, mode, params):
         errors = {}
         eval_metric_ops = {}
         # errors of key sequences
+        eval_metric_ops['attention'] = tf.metrics.mean_tensor(attention_mean)
         for i, column in enumerate(label_sequences_columns):
             column_name = column.name
             errors[column_name] = _compute_mean_absolute_error(

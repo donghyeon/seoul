@@ -2,7 +2,6 @@ import time
 import os
 import json
 
-import numpy as np
 import pandas as pd
 import tensorflow as tf
 
@@ -30,19 +29,22 @@ df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 # Preprocess dataframes
 df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, target_pm)
 
-# TODO: Split train/val/test data
-dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
-#dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
-stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
-columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
+df_features_train, df_features_eval, df_features_test, df_labels_train, df_labels_eval, df_labels_test = \
+    read_and_preprocess_pm.split_data_to_train_eval_test(df_features, df_labels)
 
-df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
-df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
-df_labels = df_labels.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드')
-
+# dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
+# #dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
+# stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
+# columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
+#
+# df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+# df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+# df_labels = df_labels.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드')
 
 # Prepare tensorflow dataset
-features, labels, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features, df_labels)
+features_train, labels_train, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features_train, df_labels_train)
+features_eval, labels_eval, _, _ = seoul_input.prepare_tf_dataset(df_features_eval, df_labels_eval)
+features_test, labels_test, _, _ = seoul_input.prepare_tf_dataset(df_features_test, df_labels_test)
 
 
 # TODO: Add an argument parser

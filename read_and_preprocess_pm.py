@@ -10,7 +10,7 @@ def read_pm_dataset(airkorea_data_dir):
     data_filenames = ['2014년 1분기.csv', '2014년 2분기.csv', '2014년 3분기.csv', '2014년 4분기.csv',
                       '2015년1분기.csv', '2015년2분기.csv', '2015년3분기.csv', '2015년4분기.csv',
                       '2016년 1분기.csv', '2016년 2분기.csv', '2016년 3분기.csv', '2016년 4분기.csv',
-                      '2017년 1분기.xlsx', '2017년 2분기.xlsx', '2017년 3분기.xlsx']
+                      '2017년 1분기.xlsx', '2017년 2분기.xlsx', '2017년 3분기.xlsx', '2017년 4분기.xlsx']
 
     # Read geolocations
     df_geo = pd.read_csv('geo.csv')
@@ -222,3 +222,21 @@ def convert_dtype_for_numeric_columns(dataframe, dtype):
     for column_name in dataframe.select_dtypes(include=np.number).columns:
         numeric_columns_to_dtype[column_name] = dtype
     return dataframe.astype(numeric_columns_to_dtype)
+
+
+def split_data_to_train_eval_test(df_features, df_labels):
+    dates = df_features.index.get_level_values('측정일시').unique()
+    index_2017_3q = dates.get_loc(2017070101)
+    index_2017_4q = dates.get_loc(2017100101)
+    dates_to_drop_for_train = dates.drop(dates[:index_2017_3q])
+    dates_to_drop_for_eval = dates.drop(dates[index_2017_3q:index_2017_4q])
+    dates_to_drop_for_test = dates.drop(dates[index_2017_4q:])
+
+    df_features_train = df_features.drop(dates_to_drop_for_train, level='측정일시')
+    df_features_eval = df_features.drop(dates_to_drop_for_eval, level='측정일시')
+    df_features_test = df_features.drop(dates_to_drop_for_test, level='측정일시')
+    df_labels_train = df_labels.drop(dates_to_drop_for_train, level='측정일시')
+    df_labels_eval = df_labels.drop(dates_to_drop_for_eval, level='측정일시')
+    df_labels_test = df_labels.drop(dates_to_drop_for_test, level='측정일시')
+
+    return df_features_train, df_features_eval, df_features_test, df_labels_train, df_labels_eval, df_labels_test
