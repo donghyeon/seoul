@@ -140,7 +140,7 @@ def seq2seq(features, labels, mode, params):
 
         elif mode == tf.estimator.ModeKeys.PREDICT or mode == tf.estimator.ModeKeys.EVAL:
             helper = tf.contrib.seq2seq.InferenceHelper(sample_fn=tf.identity,
-                                                        sample_shape=tf.TensorShape([batch_size]),
+                                                        sample_shape=[batch_size],
                                                         sample_dtype=tf.float32,
                                                         start_inputs=start_tokens,
                                                         end_fn=tf.no_op)
@@ -202,7 +202,8 @@ def seq2seq(features, labels, mode, params):
                     labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
+            logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'attention': eval_metric_ops['attention'][0],
+                                                       **errors}, every_n_iter=100)
             return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
                                               evaluation_hooks=[logging_hook])
 
@@ -216,7 +217,8 @@ def seq2seq(features, labels, mode, params):
         gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
         train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1)
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'attention': eval_metric_ops['attention'][0],
+                                                   **errors}, every_n_iter=100)
         return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                           eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
