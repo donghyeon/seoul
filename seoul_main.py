@@ -23,23 +23,24 @@ df_pm = read_and_preprocess_pm.get_dataframe_with_complete_pm25(df_pm)
 df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
 # Make output values to predict
-target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [3, 6, 9, 12])
+target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [6, 12, 24, 48])
 df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
 # Preprocess dataframes
 df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, target_pm)
 
-df_features_train, df_features_eval, df_features_test, df_labels_train, df_labels_eval, df_labels_test = \
-    read_and_preprocess_pm.split_data_to_train_eval_test(df_features, df_labels)
-
 # dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
-# #dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
+# dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
 # stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
 # columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
-#
-# df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
-# df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
-# df_labels = df_labels.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드')
+
+df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
+df_labels = df_labels.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드')
+
+
+df_features_train, df_features_eval, df_features_test, df_labels_train, df_labels_eval, df_labels_test = \
+    read_and_preprocess_pm.split_data_to_train_eval_test(df_features, df_labels)
 
 # Prepare tensorflow dataset
 features_train, labels_train, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features_train, df_labels_train)
