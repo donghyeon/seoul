@@ -112,7 +112,7 @@ class TargetPM(object):
     @staticmethod
     def get_key_hour_from_column_name(column_name):
         key, hour = column_name.split('_')
-        return tuple(key, int(hour))
+        return key, int(hour)
 
     def get_label_column_names_by_key(self, key):
         return [self.get_label_column_name(key, hour)
