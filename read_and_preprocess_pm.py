@@ -92,7 +92,7 @@ class TargetPM(object):
 
     PM10 = 'PM10'
     PM25 = 'PM25'
-    _column_name_definition = '%s_%d'
+    _column_name_definition = '%s_%02d'
 
     @property
     def keys(self):
@@ -106,13 +106,13 @@ class TargetPM(object):
     def label_columns(self):
         return self.get_all_label_column_names()
 
-    @staticmethod
-    def get_label_column_name(key, hour):
-        return '%s_%dh' % (key, hour)
+    def get_label_column_name(self, key, hour):
+        return self._column_name_definition % (key, hour)
 
     @staticmethod
     def get_key_hour_from_column_name(column_name):
-        return tuple(column_name.split('_'))
+        key, hour = column_name.split('_')
+        return tuple(key, int(hour))
 
     def get_label_column_names_by_key(self, key):
         return [self.get_label_column_name(key, hour)
