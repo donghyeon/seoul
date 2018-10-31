@@ -400,6 +400,6 @@ class SeoulLargeInputsEmbedder(tf.layers.Layer):
     def call(self, inputs):
         day_inputs = inputs[:, -self._day_region_start_hour:]
         week_inputs = inputs[:, -self._week_region_start_hour:-self._day_region_start_hour]
-        inputs = tf.concat((self._week_embedding_layer(week_inputs), self._day_embedding_layer(day_inputs)), -1)
+        inputs = tf.concat((self._week_embedding_layer(week_inputs), self._day_embedding_layer(day_inputs)), 1)
         return inputs
 
