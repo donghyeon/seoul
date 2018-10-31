@@ -28,6 +28,10 @@ def simple_lstm(features, labels, mode, params):
     targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
     targets = targets[:, -1]  # Discard values except for the last time step
 
+    with tf.variable_scope('conv_embedding'):
+        conv_embedding_layer = LargeInputsEmbeddingLayer(10, 3)
+        inputs = conv_embedding_layer(inputs)
+
     with tf.variable_scope('pm_regression') as vs:
         # create stacked LSTMCells
         rnn_layers = [tf.nn.rnn_cell.LSTMCell(size) for size in params['num_encoder_states']]
@@ -350,3 +354,30 @@ def transformer(features, labels, mode, params):
     logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1)
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                       eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
+
+
+class LargeInputsEmbeddingLayer(tf.layers.Layer):
+    def __init__(self, filter_size, kernel_size):
+        super(LargeInputsEmbeddingLayer, self).__init__()
+        self._filter_size = filter_size
+        self._kernel_size = kernel_size
+
+    def build(self, _):
+        self.conv1 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
+                                      padding='same', activation=tf.nn.relu)
+        self.pool1 = tf.layers.MaxPooling1D(2, 2)
+        self.conv2 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
+                                      padding='same', activation=tf.nn.relu)
+        self.pool2 = tf.layers.MaxPooling1D(2, 2)
+        self.conv3 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
+                                      padding='same', activation=tf.nn.relu)
+        self.pool3 = tf.layers.MaxPooling1D(2, 2)
+
+    def call(self, inputs):
+        inputs = self.conv1(inputs)
+        inputs = self.pool1(inputs)
+        inputs = self.conv2(inputs)
+        inputs = self.pool2(inputs)
+        inputs = self.conv3(inputs)
+        inputs = self.pool3(inputs)
+        return inputs
