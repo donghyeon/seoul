@@ -140,10 +140,10 @@ def seq2seq(features, labels, mode, params):
 
         elif mode == tf.estimator.ModeKeys.PREDICT or mode == tf.estimator.ModeKeys.EVAL:
             helper = tf.contrib.seq2seq.InferenceHelper(sample_fn=tf.identity,
-                                                        sample_shape=[batch_size],  # Error! Should be fixed.
+                                                        sample_shape=start_tokens.shape[1],
                                                         sample_dtype=tf.float32,
                                                         start_inputs=start_tokens,
-                                                        end_fn=tf.no_op)
+                                                        end_fn=tf.constant(True, dtype=tf.bool))
 
         decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                   helper,
