@@ -144,7 +144,7 @@ def seq2seq(features, labels, mode, params):
                                                         sample_shape=start_tokens.shape[1],
                                                         sample_dtype=tf.float32,
                                                         start_inputs=start_tokens,
-                                                        end_fn=lambda: end_fn_return)
+                                                        end_fn=lambda x: end_fn_return)
 
         decoder = tf.contrib.seq2seq.BasicDecoder(decoder_cell,
                                                   helper,
