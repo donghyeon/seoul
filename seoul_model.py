@@ -28,9 +28,12 @@ def simple_lstm(features, labels, mode, params):
     targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
     targets = targets[:, -1]  # Discard values except for the last time step
 
-    with tf.variable_scope('conv_embedding'):
-        conv_embedding_layer = LargeInputsEmbeddingLayer(10, 3)
-        inputs = conv_embedding_layer(inputs)
+    if params['conv_embedding']:
+        with tf.variable_scope('conv_embedding'):
+            large_inputs_embedder = SeoulLargeInputsEmbedder(
+                params['day_region_start_hour'], params['day_region_num_layer'],
+                params['week_region_start_hour'], params['week_region_num_layer'])
+            inputs = large_inputs_embedder(inputs)
 
     with tf.variable_scope('pm_regression') as vs:
         # create stacked LSTMCells
@@ -67,6 +70,9 @@ def simple_lstm(features, labels, mode, params):
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
             eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
+
+        for err in errors:
+            tf.summary.scalar(err, errors[err])
 
         if mode == tf.estimator.ModeKeys.EVAL:
             logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
@@ -357,27 +363,42 @@ def transformer(features, labels, mode, params):
 
 
 class LargeInputsEmbeddingLayer(tf.layers.Layer):
-    def __init__(self, filter_size, kernel_size):
+    def __init__(self, filter_size, kernel_size, num_layers):
         super(LargeInputsEmbeddingLayer, self).__init__()
         self._filter_size = filter_size
         self._kernel_size = kernel_size
+        self._num_layers = num_layers
+        self._convs = []
+        self._pools = []
 
     def build(self, _):
-        self.conv1 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
-                                      padding='same', activation=tf.nn.relu)
-        self.pool1 = tf.layers.MaxPooling1D(2, 2)
-        self.conv2 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
-                                      padding='same', activation=tf.nn.relu)
-        self.pool2 = tf.layers.MaxPooling1D(2, 2)
-        self.conv3 = tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
-                                      padding='same', activation=tf.nn.relu)
-        self.pool3 = tf.layers.MaxPooling1D(2, 2)
+        for i in range(self._num_layers):
+            self._convs.append(tf.layers.Conv1D(filters=self._filter_size, kernel_size=self._kernel_size,
+                                                padding='same', activation=tf.nn.relu))
+            self._pools.append(tf.layers.MaxPooling1D(2, 2))
 
     def call(self, inputs):
-        inputs = self.conv1(inputs)
-        inputs = self.pool1(inputs)
-        inputs = self.conv2(inputs)
-        inputs = self.pool2(inputs)
-        inputs = self.conv3(inputs)
-        inputs = self.pool3(inputs)
+        for i in range(self._num_layers):
+            inputs = self._convs[i](inputs)
+            inputs = self._pools[i](inputs)
         return inputs
+
+
+class SeoulLargeInputsEmbedder(object):
+    def __init__(self, day_region_start_hour, day_region_num_layer,
+                 week_region_start_hour, week_region_num_layer):
+        self._day_region_start_hour = day_region_start_hour
+        self._day_region_num_layer = day_region_num_layer
+        self._week_region_start_hour = week_region_start_hour
+        self._week_region_num_layer = week_region_num_layer
+
+    def build(self, _):
+        self._day_embedding_layer = LargeInputsEmbeddingLayer(3, 10, self._day_region_num_layer)
+        self._week_embedding_layer = LargeInputsEmbeddingLayer(3, 10, self._week_region_num_layer)
+
+    def call(self, inputs):
+        day_inputs = inputs[:, -self._day_region_start_hour:]
+        week_inputs = inputs[:, -self._week_region_start_hour:-self._day_region_start_hour]
+        inputs = tf.concat((self._week_embedding_layer(week_inputs), self._day_embedding_layer(day_inputs)), -1)
+        return inputs
+

@@ -79,14 +79,17 @@ if not os.path.exists(os.path.join(model_dir, exp_prefix)):
 
 # Define an estimator object
 run_config = tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config,
-                                    save_checkpoints_steps=1000)
+                                    save_checkpoints_steps=500)
+params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
+          'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
+          'batch_size': batch_size, 'window_size': window_size,
+          'num_encoder_states': num_encoder_states,
+          'learning_rate': learning_rate}
 seoul_regressor = tf.estimator.Estimator(
     model_fn=seoul_model.simple_lstm, config=run_config,
-    params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-            'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
-            'batch_size': batch_size, 'window_size': window_size,
-            'num_encoder_states': num_encoder_states,
-            'learning_rate': learning_rate})
+    params={**params, 'conv_embedding': True,
+            'day_region_start_hour': 24, 'day_region_num_layer': 1,
+            'week_region_start_hour': 24*9, 'week_region_num_layer': 4})
 
 # seoul_regressor = tf.estimator.Estimator(
 #     model_fn=seoul_model.seq2seq, config=run_config,
@@ -127,6 +130,7 @@ with open(exp_configs_filename, 'w') as f:
 train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_train, labels_train, window_size, batch_size, num_epoch))
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
-    features_eval, labels_eval, window_size, batch_size, 1), start_delay_secs=60)
+    features_eval, labels_eval, window_size, batch_size, 1),
+    start_delay_secs=30, throttle_secs=30)
 
 tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
