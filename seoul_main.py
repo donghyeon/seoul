@@ -51,15 +51,15 @@ features_test, labels_test, _, _ = seoul_input.prepare_tf_dataset(df_features_te
 # TODO: Add an argument parser
 # Set hyper-parameters for encoder
 num_encoder_states = [128]
-window_size = 24
+window_size = 24 * 8
 batch_size = 100
 
 # hyper-parameters for seq2seq
 num_decoder_states = [128]
 
 # hyper-parameters for training
-learning_rate = 0.01
-num_epoch = 100
+learning_rate = 0.001
+num_epoch = 1
 
 tf.logging.set_verbosity(tf.logging.INFO)
 
@@ -78,27 +78,26 @@ if not os.path.exists(os.path.join(model_dir, exp_prefix)):
 
 
 # Define an estimator object
-# seoul_regressor = tf.estimator.Estimator(
-#     model_fn=seoul_model.simple_lstm,
-#     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
-#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
-#             'batch_size': batch_size, 'window_size': window_size,
-#             'num_encoder_states': num_encoder_states,
-#             'learning_rate': learning_rate})
-
+run_config = tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config,
+                                    save_checkpoints_steps=1000)
 seoul_regressor = tf.estimator.Estimator(
-    model_fn=seoul_model.seq2seq,
-    config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
+    model_fn=seoul_model.simple_lstm, config=run_config,
     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
             'batch_size': batch_size, 'window_size': window_size,
-            'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
+            'num_encoder_states': num_encoder_states,
             'learning_rate': learning_rate})
 
 # seoul_regressor = tf.estimator.Estimator(
-#     model_fn=seoul_model.transformer,
-#     config=tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config),
+#     model_fn=seoul_model.seq2seq, config=run_config,
+#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
+#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
+#             'batch_size': batch_size, 'window_size': window_size,
+#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
+#             'learning_rate': learning_rate})
+#
+# seoul_regressor = tf.estimator.Estimator(
+#     model_fn=seoul_model.transformer, config=run_config,
 #     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
 #             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
 #             'batch_size': batch_size, 'window_size': window_size,
