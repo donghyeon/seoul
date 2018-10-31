@@ -23,16 +23,16 @@ df_pm = read_and_preprocess_pm.get_dataframe_with_complete_pm25(df_pm)
 df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
 # Make output values to predict
-target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [6, 12, 24, 48])
+target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], [1, 2, 4, 8, 16, 24, 48, 72])
 df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
 # Preprocess dataframes
 df_pm, df_features, df_labels = read_and_preprocess_pm.preprocess_pm(df_pm, target_pm)
 
-# dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
+dates_to_drop = df_pm.index.get_level_values('측정일시').unique()[0:0]
 # dates_to_drop = dates_to_drop[dates_to_drop % 3 != 1]
-# stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
-# columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
+stations_to_drop = df_pm.index.get_level_values('측정소코드').unique()[0:0]
+columns_to_drop = df_features.columns.drop([TargetPM.PM10, TargetPM.PM25])[0:0]
 
 df_pm = df_pm.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
 df_features = df_features.drop(dates_to_drop, level='측정일시').drop(stations_to_drop, level='측정소코드').drop(columns_to_drop, axis=1)
@@ -127,6 +127,6 @@ with open(exp_configs_filename, 'w') as f:
 train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_train, labels_train, window_size, batch_size, num_epoch))
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
-    features_eval, labels_eval, window_size, batch_size, 1))
+    features_eval, labels_eval, window_size, batch_size, 1), start_delay_secs=60)
 
 tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
