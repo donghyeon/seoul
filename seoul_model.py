@@ -384,9 +384,10 @@ class LargeInputsEmbeddingLayer(tf.layers.Layer):
         return inputs
 
 
-class SeoulLargeInputsEmbedder(object):
+class SeoulLargeInputsEmbedder(tf.layers.Layer):
     def __init__(self, day_region_start_hour, day_region_num_layer,
                  week_region_start_hour, week_region_num_layer):
+        super(SeoulLargeInputsEmbedder, self).__init__()
         self._day_region_start_hour = day_region_start_hour
         self._day_region_num_layer = day_region_num_layer
         self._week_region_start_hour = week_region_start_hour
