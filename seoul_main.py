@@ -51,7 +51,7 @@ features_test, labels_test, _, _ = seoul_input.prepare_tf_dataset(df_features_te
 # TODO: Add an argument parser
 # Set hyper-parameters for encoder
 num_encoder_states = [128]
-window_size = 24 * 8
+window_size = 24 * 9
 batch_size = 100
 
 # hyper-parameters for seq2seq
@@ -61,10 +61,6 @@ num_decoder_states = [128]
 learning_rate = 0.001
 num_epoch = 1
 
-tf.logging.set_verbosity(tf.logging.INFO)
-
-session_config = tf.ConfigProto()
-session_config.gpu_options.allow_growth = True
 
 # Use specific directories to manage experiments
 model_dir = 'models'
@@ -78,34 +74,29 @@ if not os.path.exists(os.path.join(model_dir, exp_prefix)):
 
 
 # Define an estimator object
+tf.logging.set_verbosity(tf.logging.INFO)
+session_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
 run_config = tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config,
                                     save_checkpoints_steps=500)
 params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
           'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
           'batch_size': batch_size, 'window_size': window_size,
-          'num_encoder_states': num_encoder_states,
-          'learning_rate': learning_rate}
+          'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
+          'learning_rate': learning_rate,
+          'conv_embedding': True,
+          'day_region_start_hour': 24, 'day_region_num_layer': 1,
+          'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4}
 seoul_regressor = tf.estimator.Estimator(
     model_fn=seoul_model.simple_lstm, config=run_config,
-    params={**params, 'conv_embedding': True,
-            'day_region_start_hour': 24, 'day_region_num_layer': 1,
-            'week_region_start_hour': 24*9, 'week_region_num_layer': 4})
+    params=params)
 
 # seoul_regressor = tf.estimator.Estimator(
 #     model_fn=seoul_model.seq2seq, config=run_config,
-#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
-#             'batch_size': batch_size, 'window_size': window_size,
-#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-#             'learning_rate': learning_rate})
+#     params=params)
 #
 # seoul_regressor = tf.estimator.Estimator(
 #     model_fn=seoul_model.transformer, config=run_config,
-#     params={'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-#             'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
-#             'batch_size': batch_size, 'window_size': window_size,
-#             'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-#             'learning_rate': learning_rate,
+#     params={**params,
 #             'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
 #             'num_heads': 8, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
 #             'num_hidden_layers': 6, 'filter_size': 64})
@@ -123,14 +114,10 @@ exp_configs[exp_time_str] = {'target_pm': target_pm.to_dict(), 'num_LSTM_states'
 with open(exp_configs_filename, 'w') as f:
     json.dump(exp_configs, f)
 
-# Let's train!
-# seoul_regressor.train(input_fn=lambda: seoul_input.sliding_window_input_fn(
-#     features_train, labels_train, window_size, batch_size, num_epoch))
-
+# Let's train and evaluate
 train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_train, labels_train, window_size, batch_size, num_epoch))
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_eval, labels_eval, window_size, batch_size, 1),
     start_delay_secs=30, throttle_secs=30)
-
 tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
