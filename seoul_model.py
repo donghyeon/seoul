@@ -226,8 +226,7 @@ def seq2seq(features, labels, mode, params):
         gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
         train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'attention': eval_metric_ops['attention'][1],
-                                                   **errors}, every_n_iter=100)
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
         return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                           eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
