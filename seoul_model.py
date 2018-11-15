@@ -195,7 +195,6 @@ def seq2seq(features, labels, mode, params):
         errors = {}
         eval_metric_ops = {}
         # errors of key sequences
-        eval_metric_ops['attention'] = tf.metrics.mean_tensor(attention_mean)
         for i, column in enumerate(label_sequences_columns):
             column_name = column.name
             errors[column_name] = _compute_mean_absolute_error(
@@ -213,8 +212,7 @@ def seq2seq(features, labels, mode, params):
                     labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
         if mode == tf.estimator.ModeKeys.EVAL:
-            logging_hook = tf.train.LoggingTensorHook({'loss': loss, 'attention': eval_metric_ops['attention'][1],
-                                                       **errors}, every_n_iter=100)
+            logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
             return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
                                               evaluation_hooks=[logging_hook])
 

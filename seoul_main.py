@@ -58,26 +58,22 @@ batch_size = 100
 num_decoder_states = [128]
 
 # hyper-parameters for training
-learning_rate = 0.001
+learning_rate = 1e-4
 num_epoch = 1
 
 
 # Use specific directories to manage experiments
-model_dir = 'models'
-exp_prefix = 'seoul_lstm'
+experiment_dir = 'models'
 exp_time_str = time.strftime('%y%m%d_%H%M%S', time.localtime())
-ckpt_dir = os.path.join(model_dir, exp_prefix, exp_time_str)
-if not os.path.exists(model_dir):
-    os.mkdir(model_dir)
-if not os.path.exists(os.path.join(model_dir, exp_prefix)):
-    os.mkdir(os.path.join(model_dir, exp_prefix))
+model_dir = os.path.join(experiment_dir, exp_time_str)
 
 
 # Define an estimator object
 tf.logging.set_verbosity(tf.logging.INFO)
 session_config = tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
-run_config = tf.estimator.RunConfig(model_dir=ckpt_dir, session_config=session_config,
-                                    save_checkpoints_steps=500)
+run_config = tf.estimator.RunConfig(model_dir=model_dir,
+                                    session_config=session_config,
+                                    save_checkpoints_steps=100)
 params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
           'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
           'batch_size': batch_size, 'window_size': window_size,
@@ -86,13 +82,13 @@ params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_col
           'conv_embedding': True,
           'day_region_start_hour': 24, 'day_region_num_layer': 1,
           'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4}
-seoul_regressor = tf.estimator.Estimator(
-    model_fn=seoul_model.simple_lstm, config=run_config,
-    params=params)
-
 # seoul_regressor = tf.estimator.Estimator(
-#     model_fn=seoul_model.seq2seq, config=run_config,
+#     model_fn=seoul_model.simple_lstm, config=run_config,
 #     params=params)
+
+seoul_regressor = tf.estimator.Estimator(
+    model_fn=seoul_model.seq2seq, config=run_config,
+    params=params)
 #
 # seoul_regressor = tf.estimator.Estimator(
 #     model_fn=seoul_model.transformer, config=run_config,
@@ -102,22 +98,10 @@ seoul_regressor = tf.estimator.Estimator(
 #             'num_hidden_layers': 6, 'filter_size': 64})
 
 
-# TODO: Find a popular library for adjusting configs of experiments or make this as a simple tool
-# Load and save experiments' configs to manage experiments later
-exp_configs = {}
-exp_configs_filename = os.path.join(model_dir, exp_prefix + '.json')
-if os.path.exists(exp_configs_filename):
-    with open(exp_configs_filename, 'r') as f:
-        exp_configs = json.load(f)
-exp_configs[exp_time_str] = {'target_pm': target_pm.to_dict(), 'num_LSTM_states': num_encoder_states,
-                             'learning_rate': learning_rate, 'batch_size': batch_size, 'window_size': window_size}
-with open(exp_configs_filename, 'w') as f:
-    json.dump(exp_configs, f)
-
 # Let's train and evaluate
 train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_train, labels_train, window_size, batch_size, num_epoch))
 eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
     features_eval, labels_eval, window_size, batch_size, 1),
-    start_delay_secs=30, throttle_secs=30)
+    start_delay_secs=60, throttle_secs=60)
 tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
