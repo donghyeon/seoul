@@ -149,7 +149,7 @@ def seq2seq(features, labels, mode, params):
             helper = tf.contrib.seq2seq.TrainingHelper(training_helper_inputs, targets_sequence_length)
 
         elif mode == tf.estimator.ModeKeys.PREDICT or mode == tf.estimator.ModeKeys.EVAL:
-            end_fn_return = tf.constant(True, dtype=tf.bool)
+            end_fn_return = tf.constant(False, dtype=tf.bool)
             helper = tf.contrib.seq2seq.InferenceHelper(sample_fn=tf.identity,
                                                         sample_shape=start_tokens.shape[1],
                                                         sample_dtype=tf.float32,

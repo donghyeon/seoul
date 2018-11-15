@@ -52,7 +52,7 @@ features_test, labels_test, _, _ = seoul_input.prepare_tf_dataset(df_features_te
 # Set hyper-parameters for encoder
 num_encoder_states = [128]
 window_size = 24 * 9
-batch_size = 100
+batch_size = 10
 
 # hyper-parameters for seq2seq
 num_decoder_states = [128]
@@ -63,7 +63,7 @@ num_epoch = 1
 
 
 # Use specific directories to manage experiments
-experiment_dir = 'models'
+experiment_dir = 'experiments'
 exp_time_str = time.strftime('%y%m%d_%H%M%S', time.localtime())
 model_dir = os.path.join(experiment_dir, exp_time_str)
 
@@ -75,7 +75,7 @@ run_config = tf.estimator.RunConfig(model_dir=model_dir,
                                     session_config=session_config,
                                     save_checkpoints_steps=100)
 params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-          'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features),
+          'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features_train),
           'batch_size': batch_size, 'window_size': window_size,
           'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
           'learning_rate': learning_rate,
