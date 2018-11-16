@@ -7,6 +7,7 @@
 import tensorflow as tf
 import numpy as np
 from fixed_len_sequece_numeric_column import fixed_len_sequence_numeric_column
+from seoul_input import TargetPM
 import seoul_transformer
 
 
@@ -49,7 +50,7 @@ def simple_lstm(features, labels, mode, params):
 
         predictions = {}
         for i, column in enumerate(label_columns):
-            key, _ = target_pm.get_key_hour_from_column_name(column.name)
+            key, _ = TargetPM.get_key_hour_from_column_name(column.name)
             mean = features_mean[key]
             stddev = features_stddev[key]
             predictions[column.name] = _inverse_standardize(outputs[:, i], mean, stddev)
@@ -65,14 +66,13 @@ def simple_lstm(features, labels, mode, params):
         # errors of all label columns
         for i, column in enumerate(label_columns):
             column_name = column.name
-            key, hour = target_pm.get_key_hour_from_column_name(column_name)
+            key, hour = TargetPM.get_key_hour_from_column_name(column_name)
             errors[column_name] = _compute_mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
             eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
-        for err in errors:
-            tf.summary.scalar(err, errors[err])
+        _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
             logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
@@ -211,6 +211,8 @@ def seq2seq(features, labels, mode, params):
                 eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                     labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
+        _add_summary_training_errors(errors)
+
         if mode == tf.estimator.ModeKeys.EVAL:
             logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
             return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
@@ -260,6 +262,12 @@ def _inverse_standardize(standardized_dataset, mean, stddev):
 
 def _compute_mean_absolute_error(labels, predictions):
     return tf.reduce_mean(tf.abs(labels - predictions))
+
+
+def _add_summary_training_errors(errors):
+    for column_name in errors:
+        key_hour_split = TargetPM.get_key_hour_from_column_name(column_name)
+        tf.summary.scalar('%s/%sh' % (key_hour_split[0], column_name), errors[column_name])
 
 
 def add_l2_loss(variables, scale_factor):
@@ -338,6 +346,8 @@ def transformer(features, labels, mode, params):
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
             eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
+
+    _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
         logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
