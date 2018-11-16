@@ -72,6 +72,9 @@ def simple_lstm(features, labels, mode, params):
             eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
+        for column_name in errors:
+            key, hour = TargetPM.get_key_hour_from_column_name(column_name)
+
         _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
@@ -266,8 +269,8 @@ def _compute_mean_absolute_error(labels, predictions):
 
 def _add_summary_training_errors(errors):
     for column_name in errors:
-        key_hour_split = TargetPM.get_key_hour_from_column_name(column_name)
-        tf.summary.scalar('%s/%sh' % (key_hour_split[0], column_name), errors[column_name])
+        key = column_name.split('_')[0]
+        tf.summary.scalar('%s/%sh' % (key, column_name), errors[column_name])
 
 
 def add_l2_loss(variables, scale_factor):
@@ -346,7 +349,7 @@ def transformer(features, labels, mode, params):
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
             eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
-
+            
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -364,7 +367,7 @@ def transformer(features, labels, mode, params):
     gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
     train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1)
+    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                       eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
