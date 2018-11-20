@@ -10,6 +10,159 @@ from fixed_len_sequece_numeric_column import fixed_len_sequence_numeric_column
 from seoul_input import TargetPM
 import seoul_transformer
 
+def simple_cnn(features, labels, mode, params):
+    features_mean, features_stddev = params['features_statistics']
+    feature_columns = params['feature_columns']
+    label_columns = params['label_columns']
+    target_pm = params['target_pm']
+    learning_rate = params['learning_rate']
+
+    input_dim = len(feature_columns)
+    output_dim = len(target_pm.label_columns)
+
+    # label_columns should be sorted when you use tf.feature_column.input_layer for labels
+    label_columns = sorted(label_columns, key=lambda x: x.name)
+
+    # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
+    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
+    
+    inputs.set_shape([params['batch_size'], params['window_size'], input_dim])
+    input_shape = tf.shape(inputs)
+    inputs = tf.reshape(inputs, [input_shape[0],input_shape[1]*input_shape[2],1])
+    
+    conv1 = tf.layers.conv1d(
+      inputs=inputs,
+      filters=32,
+      kernel_size=5,
+      padding="same",
+      activation=tf.nn.relu)
+
+    # Pooling Layer #1
+    pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=2, strides=2)
+
+    # Convolutional Layer #2 and Pooling Layer #2
+    conv2 = tf.layers.conv1d(
+      inputs=pool1,
+      filters=64,
+      kernel_size=5,
+      padding="same",
+      activation=tf.nn.relu)
+    pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=2, strides=2)
+
+  # Dense Layer
+    pool2_flat = tf.reshape(pool2, [-1, input_shape[1]*input_shape[2] * 16])
+    dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+    outputs = tf.layers.dense(dense, output_dim, activation=None)
+    
+    predictions = {}
+    for i, column in enumerate(label_columns):
+        key, _ = target_pm.get_key_hour_from_column_name(column.name)
+        mean = features_mean[key]
+        stddev = features_stddev[key]
+        predictions[column.name] = _inverse_standardize(outputs[:, i], mean, stddev)
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+
+    loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
+    loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
+
+    errors = {}
+    eval_metric_ops = {}
+    # errors of all label columns
+    for i, column in enumerate(label_columns):
+        column_name = column.name
+        key, hour = target_pm.get_key_hour_from_column_name(column_name)
+        errors[column_name] = _compute_mean_absolute_error(
+            labels=labels[column_name][:, -1], predictions=predictions[column_name])
+        eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
+            labels=labels[column_name][:, -1], predictions=predictions[column_name])
+    _add_summary_training_errors(errors)
+
+    if mode == tf.estimator.ModeKeys.EVAL:
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=10)
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
+                                              evaluation_hooks=[logging_hook])
+
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    
+    gradients, variables = zip(*optimizer.compute_gradients(loss))
+    gradients, _ = tf.clip_by_global_norm(gradients, 0.01)
+    train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
+
+    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=10)
+    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
+                                      eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])    
+
+def simple_dnn(features, labels, mode, params):
+    features_mean, features_stddev = params['features_statistics']
+    feature_columns = params['feature_columns']
+    label_columns = params['label_columns']
+    target_pm = params['target_pm']
+    learning_rate = params['learning_rate']
+
+    input_dim = len(feature_columns)
+    output_dim = len(target_pm.label_columns)
+
+    # label_columns should be sorted when you use tf.feature_column.input_layer for labels
+    label_columns = sorted(label_columns, key=lambda x: x.name)
+
+    # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
+    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
+    
+    inputs.set_shape([params['batch_size'], params['window_size'], input_dim])
+    input_shape = tf.shape(inputs)
+    inputs = tf.reshape(inputs, [input_shape[0],input_shape[1]*input_shape[2]])
+    
+    for units in [1024,512, 256, 128, 64]:
+        inputs = tf.layers.dense(inputs, units, tf.nn.relu)
+    outputs = tf.layers.dense(inputs, output_dim, activation=None)
+    
+    predictions = {}
+    for i, column in enumerate(label_columns):
+        key, _ = target_pm.get_key_hour_from_column_name(column.name)
+        mean = features_mean[key]
+        stddev = features_stddev[key]
+        predictions[column.name] = _inverse_standardize(outputs[:, i], mean, stddev)
+
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+
+    loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
+    loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
+
+    errors = {}
+    eval_metric_ops = {}
+    # errors of all label columns
+    for i, column in enumerate(label_columns):
+        column_name = column.name
+        key, hour = target_pm.get_key_hour_from_column_name(column_name)
+        errors[column_name] = _compute_mean_absolute_error(
+            labels=labels[column_name][:, -1], predictions=predictions[column_name])
+        eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
+            labels=labels[column_name][:, -1], predictions=predictions[column_name])
+
+    if mode == tf.estimator.ModeKeys.EVAL:
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1000)
+        return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
+                                              evaluation_hooks=[logging_hook])
+
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    
+    gradients, variables = zip(*optimizer.compute_gradients(loss))
+    gradients, _ = tf.clip_by_global_norm(gradients, 0.01)
+    train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
+
+    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1000)
+    return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
+                                      eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])    
+
 
 def simple_lstm(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
