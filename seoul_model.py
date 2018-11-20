@@ -35,7 +35,7 @@ def simple_cnn(features, labels, mode, params):
     
     conv1 = tf.layers.conv1d(
       inputs=inputs,
-      filters=32,
+      filters=128,
       kernel_size=5,
       padding="same",
       activation=tf.nn.relu)
@@ -46,7 +46,7 @@ def simple_cnn(features, labels, mode, params):
     # Convolutional Layer #2 and Pooling Layer #2
     conv2 = tf.layers.conv1d(
       inputs=pool1,
-      filters=64,
+      filters=128,
       kernel_size=5,
       padding="same",
       activation=tf.nn.relu)
