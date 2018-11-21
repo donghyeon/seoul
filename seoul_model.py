@@ -80,6 +80,7 @@ def simple_cnn(features, labels, mode, params):
             labels=labels[column_name][:, -1], predictions=predictions[column_name])
         eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
             labels=labels[column_name][:, -1], predictions=predictions[column_name])
+        
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -120,7 +121,7 @@ def simple_dnn(features, labels, mode, params):
     input_shape = tf.shape(inputs)
     inputs = tf.reshape(inputs, [input_shape[0],input_shape[1]*input_shape[2]])
     
-    for units in [1024,512, 256, 128, 64]:
+    for units in [1024, 512, 256, 128, 64]:
         inputs = tf.layers.dense(inputs, units, tf.nn.relu)
     outputs = tf.layers.dense(inputs, output_dim, activation=None)
     
@@ -148,6 +149,8 @@ def simple_dnn(features, labels, mode, params):
         eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
             labels=labels[column_name][:, -1], predictions=predictions[column_name])
 
+    _add_summary_training_errors(errors)
+    
     if mode == tf.estimator.ModeKeys.EVAL:
         logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1000)
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,

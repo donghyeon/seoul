@@ -226,10 +226,12 @@ def convert_dtype_for_numeric_columns(dataframe, dtype):
 
 def split_data_to_train_eval_test(df_features, df_labels):
     dates = df_features.index.get_level_values('측정일시').unique()
+    index_2017_1q = dates.get_loc(2017010101)
+    index_2017_2q = dates.get_loc(2017040101)
     index_2017_3q = dates.get_loc(2017070101)
     index_2017_4q = dates.get_loc(2017100101)
-    dates_to_drop_for_train = dates.drop(dates[:index_2017_3q])
-    dates_to_drop_for_eval = dates.drop(dates[index_2017_3q:index_2017_4q])
+    dates_to_drop_for_train = dates.drop(dates[:index_2017_1q])
+    dates_to_drop_for_eval = dates.drop(dates[index_2017_1q:index_2017_2q])
     dates_to_drop_for_test = dates.drop(dates[index_2017_4q:])
 
     df_features_train = df_features.drop(dates_to_drop_for_train, level='측정일시')
