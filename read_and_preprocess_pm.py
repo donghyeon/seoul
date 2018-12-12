@@ -92,7 +92,7 @@ class TargetPM(object):
 
     PM10 = 'PM10'
     PM25 = 'PM25'
-    _column_name_definition = '%s_%02d'
+    _column_name_definition = '%s_%03d'
 
     @property
     def keys(self):
@@ -224,21 +224,14 @@ def convert_dtype_for_numeric_columns(dataframe, dtype):
     return dataframe.astype(numeric_columns_to_dtype)
 
 
-def split_data_to_train_eval_test(df_features, df_labels):
-    dates = df_features.index.get_level_values('측정일시').unique()
-    index_2017_1q = dates.get_loc(2017010101)
-    index_2017_2q = dates.get_loc(2017040101)
-    index_2017_3q = dates.get_loc(2017070101)
-    index_2017_4q = dates.get_loc(2017100101)
-    dates_to_drop_for_train = dates.drop(dates[:index_2017_1q])
-    dates_to_drop_for_eval = dates.drop(dates[index_2017_1q:index_2017_2q])
-    dates_to_drop_for_test = dates.drop(dates[index_2017_4q:])
+def split_data_to_train_eval(df_features, df_labels):
+    idx = pd.IndexSlice
+    dates_train = idx[:2016123124]
+    dates_eval = idx[2017010101:]
 
-    df_features_train = df_features.drop(dates_to_drop_for_train, level='측정일시')
-    df_features_eval = df_features.drop(dates_to_drop_for_eval, level='측정일시')
-    df_features_test = df_features.drop(dates_to_drop_for_test, level='측정일시')
-    df_labels_train = df_labels.drop(dates_to_drop_for_train, level='측정일시')
-    df_labels_eval = df_labels.drop(dates_to_drop_for_eval, level='측정일시')
-    df_labels_test = df_labels.drop(dates_to_drop_for_test, level='측정일시')
+    df_features_train = df_features.xs(dates_train, level='측정일시', drop_level=False)
+    df_features_eval = df_features.xs(dates_eval, level='측정일시', drop_level=False)
+    df_labels_train = df_labels.xs(dates_train, level='측정일시', drop_level=False)
+    df_labels_eval = df_labels.xs(dates_eval, level='측정일시', drop_level=False)
 
-    return df_features_train, df_features_eval, df_features_test, df_labels_train, df_labels_eval, df_labels_test
+    return df_features_train, df_labels_train, df_features_eval, df_labels_eval

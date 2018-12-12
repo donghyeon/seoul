@@ -10,6 +10,7 @@ from fixed_len_sequece_numeric_column import fixed_len_sequence_numeric_column
 from seoul_input import TargetPM
 import seoul_transformer
 
+
 def simple_cnn(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
     feature_columns = params['feature_columns']
@@ -29,33 +30,39 @@ def simple_cnn(features, labels, mode, params):
     targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
     targets = targets[:, -1]  # Discard values except for the last time step
     
-    inputs.set_shape([params['batch_size'], params['window_size'], input_dim])
-    input_shape = tf.shape(inputs)
-    inputs = tf.reshape(inputs, [input_shape[0],input_shape[1]*input_shape[2],1])
+    inputs.set_shape([None, params['window_size'], input_dim])
+    input_shape = combined_static_and_dynamic_shape(inputs)
+    inputs = tf.reshape(inputs, [input_shape[0], input_shape[1]*input_shape[2], 1])
     
     conv1 = tf.layers.conv1d(
-      inputs=inputs,
-      filters=128,
-      kernel_size=5,
-      padding="same",
-      activation=tf.nn.relu)
+        inputs=inputs,
+        filters=64,
+        kernel_size=5,
+        padding="same",
+        activation=tf.nn.relu)
 
     # Pooling Layer #1
     pool1 = tf.layers.max_pooling1d(inputs=conv1, pool_size=2, strides=2)
 
     # Convolutional Layer #2 and Pooling Layer #2
     conv2 = tf.layers.conv1d(
-      inputs=pool1,
-      filters=128,
-      kernel_size=5,
-      padding="same",
-      activation=tf.nn.relu)
+        inputs=pool1,
+        filters=128,
+        kernel_size=5,
+        padding="same",
+        activation=tf.nn.relu)
     pool2 = tf.layers.max_pooling1d(inputs=conv2, pool_size=2, strides=2)
+    conv3 = tf.layers.conv1d(
+        inputs=pool2,
+        filters=256,
+        kernel_size=5,
+        padding="same",
+        activation=None)
+    pool3_global_average = tf.reduce_mean(conv3, 1)
 
-  # Dense Layer
-    pool2_flat = tf.reshape(pool2, [-1, input_shape[1]*input_shape[2] * 16])
-    dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
-    outputs = tf.layers.dense(dense, output_dim, activation=None)
+    # Dense Layer
+    dense = tf.layers.dense(inputs=pool3_global_average, units=256, activation=tf.nn.relu)
+    outputs = tf.layers.dense(inputs=dense, units=output_dim, activation=None)
     
     predictions = {}
     for i, column in enumerate(label_columns):
@@ -84,19 +91,20 @@ def simple_cnn(features, labels, mode, params):
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=10)
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
-                                              evaluation_hooks=[logging_hook])
+                                          evaluation_hooks=[logging_hook])
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     
     gradients, variables = zip(*optimizer.compute_gradients(loss))
-    gradients, _ = tf.clip_by_global_norm(gradients, 0.01)
+    gradients, _ = tf.clip_by_global_norm(gradients, 5.0)
     train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=10)
+    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                       eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])    
+
 
 def simple_dnn(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
@@ -116,12 +124,12 @@ def simple_dnn(features, labels, mode, params):
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
     targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
     targets = targets[:, -1]  # Discard values except for the last time step
+
+    inputs.set_shape([None, params['window_size'], input_dim])
+    input_shape = combined_static_and_dynamic_shape(inputs)
+    inputs = tf.reshape(inputs, [input_shape[0], input_shape[1] * input_shape[2]])
     
-    inputs.set_shape([params['batch_size'], params['window_size'], input_dim])
-    input_shape = tf.shape(inputs)
-    inputs = tf.reshape(inputs, [input_shape[0],input_shape[1]*input_shape[2]])
-    
-    for units in [1024, 512, 256, 128, 64]:
+    for units in [128, 64, 32]:
         inputs = tf.layers.dense(inputs, units, tf.nn.relu)
     outputs = tf.layers.dense(inputs, output_dim, activation=None)
     
@@ -152,17 +160,17 @@ def simple_dnn(features, labels, mode, params):
     _add_summary_training_errors(errors)
     
     if mode == tf.estimator.ModeKeys.EVAL:
-        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1000)
+        logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=eval_metric_ops,
-                                              evaluation_hooks=[logging_hook])
+                                          evaluation_hooks=[logging_hook])
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     
     gradients, variables = zip(*optimizer.compute_gradients(loss))
-    gradients, _ = tf.clip_by_global_norm(gradients, 0.01)
+    gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
     train_op = optimizer.apply_gradients(zip(gradients, variables), global_step=tf.train.get_global_step())
 
-    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=1000)
+    logging_hook = tf.train.LoggingTensorHook({'loss': loss, **errors}, every_n_iter=100)
     return tf.estimator.EstimatorSpec(mode, loss=loss, train_op=train_op,
                                       eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])    
 
@@ -569,3 +577,22 @@ class SeoulLargeInputsEmbedder(tf.layers.Layer):
         inputs = tf.concat((self._week_embedding_layer(week_inputs), self._day_embedding_layer(day_inputs)), 1)
         return inputs
 
+
+def combined_static_and_dynamic_shape(tensor):
+    """Returns a list containing static and dynamic values for the dimensions.
+    Returns a list of static and dynamic values for shape dimensions. This is
+    useful to preserve static shapes when available in reshape operation.
+    Args:
+    tensor: A tensor of any type.
+    Returns:
+    A list of size tensor.shape.ndims containing integers or a scalar tensor.
+    """
+    static_tensor_shape = tensor.shape.as_list()
+    dynamic_tensor_shape = tf.shape(tensor)
+    combined_shape = []
+    for index, dim in enumerate(static_tensor_shape):
+        if dim is not None:
+            combined_shape.append(dim)
+        else:
+            combined_shape.append(dynamic_tensor_shape[index])
+    return combined_shape

@@ -93,13 +93,14 @@ def inverse_standardize(standardized_dataset, mean, stddev):
     return standardized_dataset * stddev + mean
 
 
-def sliding_window_input_fn(features, labels, window_size, batch_size, num_epoch):
+# TODO: Set dynamic and static shape of tensors after applying sliding window function
+def sliding_window_input_fn(features, labels, window_size, batch_size, num_epochs):
     """
     :param features: dict of numpy array, [num_stations, time_length]
     :param labels: dict of numpy array, [num_stations, time_length]
     :param window_size: int
     :param batch_size: int
-    :param num_epoch: int
+    :param num_epochs: int
     :return: tf.data.Dataset
     """
     dataset_features = tf.data.Dataset.from_tensor_slices(features)
@@ -123,4 +124,4 @@ def sliding_window_input_fn(features, labels, window_size, batch_size, num_epoch
     num_station, time_length = next(iter(features.values())).shape
     num_data = num_station * (time_length - window_size + 1)
 
-    return dataset.shuffle(10000).repeat(num_epoch).batch(batch_size)
+    return dataset.shuffle(1000).repeat(num_epochs).batch(batch_size)
