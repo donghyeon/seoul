@@ -31,6 +31,14 @@ def simple_cnn(features, labels, mode, params):
     targets = targets[:, -1]  # Discard values except for the last time step
     
     inputs.set_shape([None, params['window_size'], input_dim])
+
+    if params['conv_embedding']:
+        with tf.variable_scope('conv_embedding'):
+            large_inputs_embedder = SeoulLargeInputsEmbedder(
+                params['day_region_start_hour'], params['day_region_num_layer'],
+                params['week_region_start_hour'], params['week_region_num_layer'])
+            inputs = large_inputs_embedder(inputs)
+
     input_shape = combined_static_and_dynamic_shape(inputs)
     inputs = tf.reshape(inputs, [input_shape[0], input_shape[1]*input_shape[2], 1])
     
@@ -126,6 +134,14 @@ def simple_dnn(features, labels, mode, params):
     targets = targets[:, -1]  # Discard values except for the last time step
 
     inputs.set_shape([None, params['window_size'], input_dim])
+
+    if params['conv_embedding']:
+        with tf.variable_scope('conv_embedding'):
+            large_inputs_embedder = SeoulLargeInputsEmbedder(
+                params['day_region_start_hour'], params['day_region_num_layer'],
+                params['week_region_start_hour'], params['week_region_num_layer'])
+            inputs = large_inputs_embedder(inputs)
+
     input_shape = combined_static_and_dynamic_shape(inputs)
     inputs = tf.reshape(inputs, [input_shape[0], input_shape[1] * input_shape[2]])
     
@@ -284,6 +300,13 @@ def seq2seq(features, labels, mode, params):
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
     targets, targets_sequence_length = tf.contrib.feature_column.sequence_input_layer(label_sequences,
                                                                                       label_sequences_columns)
+
+    if params['conv_embedding']:
+        with tf.variable_scope('conv_embedding'):
+            large_inputs_embedder = SeoulLargeInputsEmbedder(
+                params['day_region_start_hour'], params['day_region_num_layer'],
+                params['week_region_start_hour'], params['week_region_num_layer'])
+            inputs = large_inputs_embedder(inputs)
 
     # batch_size can vary
     batch_size = tf.shape(inputs)[0]
@@ -465,6 +488,13 @@ def transformer(features, labels, mode, params):
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
     targets, targets_sequence_length = tf.contrib.feature_column.sequence_input_layer(label_sequences,
                                                                                       label_sequences_columns)
+
+    if params['conv_embedding']:
+        with tf.variable_scope('conv_embedding'):
+            large_inputs_embedder = SeoulLargeInputsEmbedder(
+                params['day_region_start_hour'], params['day_region_num_layer'],
+                params['week_region_start_hour'], params['week_region_num_layer'])
+            inputs = large_inputs_embedder(inputs)
 
     params['input_size'] = inputs.shape[-1]
     params['output_size'] = targets.shape[-1]
