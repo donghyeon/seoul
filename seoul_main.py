@@ -17,12 +17,12 @@ flags.DEFINE_string('model', None, 'Model to train (dnn, cnn, rnn, seq2seq, tran
 flags.DEFINE_string(
     'hparams_overrides', None,
     'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
-flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of optimizer.')
-flags.DEFINE_integer('batch_size', 128, 'Batch size.')
-flags.DEFINE_integer('window_size', 24 * 9, 'Window size of sliding window.')
-flags.DEFINE_bool('input_embedding', True, 'Whether to apply input embedding.')
+flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
+flags.DEFINE_integer('batch_size', 128, 'Number of examples in a batch')
+flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
+flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolutional input embedding.')
 flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
-flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after evaluating the last checkpoint.')
+flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
 FLAGS = flags.FLAGS
 
 
@@ -63,9 +63,8 @@ def main(unused_argv):
     features_train, labels_train, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features_train, df_labels_train)
     features_eval, labels_eval, _, _ = seoul_input.prepare_tf_dataset(df_features_eval, df_labels_eval)
 
-
     # TODO: Add an argument parser
-    # Set hyper-parameters for encoder
+    # hyper-parameters for encoder
     num_encoder_states = [64]
 
     # hyper-parameters for seq2seq
@@ -78,6 +77,7 @@ def main(unused_argv):
         print('FLAGS.model_dir was not set. Current time will be used as a model directory.')
         FLAGS.model_dir = current_time_string
     # TODO: Add an exception when user want to evaluate a pretrained model from FLAS.model_dir
+    # Set model as rnn if it was not set.
     if FLAGS.model is None:
         print('FLAGS.model was not set. Simple RNN is used for this training.')
         FLAGS.model = 'rnn'

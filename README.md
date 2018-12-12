@@ -13,8 +13,8 @@ Airkorea PM dataset:
 ## RNN based models
 Download and unzip files. You can find a few auxiliary functions to manage dataset in
 [read\_and\_preprocess\_pm.py](https://github.com/donghyeon/seoul/blob/master/read_and_preprocess_pm.py),
-or just read pickled data [df\_pm.pickle](https://goo.gl/QYfZDH)
+or just read pickled data [df\_pm.pickle](https://goo.gl/GUdgVa)
 to reduce loading times.
 
-Just run [seoul\_main.py](https://github.com/donghyeon/seoul/blob/master/seoul_main.py).
-You can change the model function of the estimator.
+Just run [seoul\_main.py](https://github.com/donghyeon/seoul/blob/master/seoul_main.py) with some flags.
+ex) python seoul_main.py --model_dir=experiments/rnn --model=rnn
