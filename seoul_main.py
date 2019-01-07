@@ -13,7 +13,7 @@ import seoul_model
 flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
 flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
-# flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.') # Currently not supported
+# flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')  # Currently not supported
 flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
 flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
 
@@ -27,9 +27,9 @@ flags.DEFINE_string('target_keys', 'PM10,PM25', 'Labels to predict. Use comma fo
 flags.DEFINE_string('target_hours', '3,6,12,24', 'Hours to predict. Use comma for multiple hours.')
 flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
 flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolutional input embedding.')
-flags.DEFINE_string(
-    'hparams_overrides', None,
-    'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
+# flags.DEFINE_string(  # Currently not supported
+#     'hparams_overrides', None,
+#     'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
 FLAGS = flags.FLAGS
 
 
