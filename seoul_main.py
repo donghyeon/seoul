@@ -9,21 +9,32 @@ from read_and_preprocess_pm import TargetPM
 import seoul_input
 import seoul_model
 
+# Estimator flags
 flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
 flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
-flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')
+# flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.') # Currently not supported
+flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
+flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
+
+# Optimizer flags
+flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
+flags.DEFINE_integer('batch_size', 128, 'Number of examples in a batch')
+
+# Model flags
 flags.DEFINE_string('model', None, 'Model to train (dnn, cnn, rnn, seq2seq, transformer).')
+flags.DEFINE_string('target_keys', 'PM10,PM25', 'Labels to predict. Use comma for multiple keys.')
+flags.DEFINE_string('target_hours', '3,6,12,24', 'Hours to predict. Use comma for multiple hours.')
+flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
+flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolutional input embedding.')
 flags.DEFINE_string(
     'hparams_overrides', None,
     'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
-flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
-flags.DEFINE_integer('batch_size', 128, 'Number of examples in a batch')
-flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
-flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolutional input embedding.')
-flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
-flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
 FLAGS = flags.FLAGS
+
+
+def parse_string_by_commas(string):
+    return string.split(',')
 
 
 def main(unused_argv):
@@ -39,7 +50,8 @@ def main(unused_argv):
     df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
     # Make output values to predict
-    target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], list(range(24, 24*7 + 1, 24)))
+    # target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], list(range(24, 24*7 + 1, 24)))
+    target_pm = TargetPM(parse_string_by_commas(FLAGS.target_keys), parse_string_by_commas(FLAGS.target_hours))
     df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
     # Preprocess dataframes
@@ -63,7 +75,6 @@ def main(unused_argv):
     features_train, labels_train, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features_train, df_labels_train)
     features_eval, labels_eval, _, _ = seoul_input.prepare_tf_dataset(df_features_eval, df_labels_eval)
 
-    # TODO: Add an argument parser
     # hyper-parameters for encoder
     num_encoder_states = [64]
 
@@ -76,7 +87,7 @@ def main(unused_argv):
         current_time_string = time.strftime('%y%m%d_%H%M%S', time.localtime())
         print('FLAGS.model_dir was not set. Current time will be used as a model directory.')
         FLAGS.model_dir = current_time_string
-    # TODO: Add an exception when user want to evaluate a pretrained model from FLAS.model_dir
+    # TODO: Add an exception when user want to evaluate a pretrained model from FLAGS.model_dir
     # Set model as rnn if it was not set.
     if FLAGS.model is None:
         print('FLAGS.model was not set. Simple RNN is used for this training.')
