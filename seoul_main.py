@@ -51,7 +51,9 @@ def main(unused_argv):
 
     # Make output values to predict
     # target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], list(range(24, 24*7 + 1, 24)))
-    target_pm = TargetPM(parse_string_by_commas(FLAGS.target_keys), parse_string_by_commas(FLAGS.target_hours))
+    target_keys = parse_string_by_commas(FLAGS.target_keys)
+    target_hours = list(map(int, parse_string_by_commas(FLAGS.target_hours)))
+    target_pm = TargetPM(target_keys, target_hours)
     df_pm = read_and_preprocess_pm.make_target_values(df_pm, target_pm)
 
     # Preprocess dataframes
