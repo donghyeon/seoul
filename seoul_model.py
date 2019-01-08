@@ -86,7 +86,7 @@ def simple_cnn(features, labels, mode, params):
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
 
-    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, label_columns, target_pm)
+    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -154,7 +154,7 @@ def simple_dnn(features, labels, mode, params):
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
 
-    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, label_columns, target_pm)
+    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
     _add_summary_training_errors(errors)
     
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -225,7 +225,7 @@ def simple_lstm(features, labels, mode, params):
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
         loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-        errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, label_columns, target_pm)
+        errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
         _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
@@ -355,8 +355,7 @@ def seq2seq(features, labels, mode, params):
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
         loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-        errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions,
-                                                             label_sequences_columns, target_pm)
+        errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm)
         _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
@@ -452,8 +451,7 @@ def transformer(features, labels, mode, params):
     loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-    errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions,
-                                                         label_sequences_columns, target_pm)
+    errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm)
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -538,12 +536,11 @@ def combined_static_and_dynamic_shape(tensor):
     return combined_shape
 
 
-def get_key_errors_and_metrics(label_sequences, predictions, label_sequences_columns):
+def get_key_errors_and_metrics(label_sequences, predictions, target_pm):
     errors = {}
     eval_metric_ops = {}
     # errors of key sequences
-    for i, column in enumerate(label_sequences_columns):
-        key = column.name
+    for i, key in enumerate(target_pm.keys):
         label_key = '{}/Avg'.format(key)
         errors[label_key] = _compute_mean_absolute_error(
             labels=label_sequences[key], predictions=predictions[key])
@@ -552,12 +549,11 @@ def get_key_errors_and_metrics(label_sequences, predictions, label_sequences_col
     return errors, eval_metric_ops
 
 
-def get_label_errors_and_metrics(labels, predictions, label_columns, target_pm):
+def get_label_errors_and_metrics(labels, predictions, target_pm):
     errors = {}
     eval_metric_ops = {}
     # errors of all label columns
-    for i, column in enumerate(label_columns):
-        key = column.name
+    for i, key in enumerate(target_pm.keys):
         for j, hour in enumerate(target_pm.hours):
             column_name = target_pm.get_label_column_name(key, hour)
             label_key = '{}/{}h'.format(key, hour)
@@ -569,11 +565,9 @@ def get_label_errors_and_metrics(labels, predictions, label_columns, target_pm):
 
 
 # TODO: Remove target_pm dependency
-def get_all_errors_and_metrics(labels, label_sequences, predictions, label_sequences_columns, target_pm):
-    errors_key, eval_metric_ops_key = get_key_errors_and_metrics(
-        label_sequences, predictions, label_sequences_columns)
-    errors_label, eval_metric_ops_label = get_label_errors_and_metrics(
-        labels, predictions, label_sequences_columns, target_pm)
+def get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm):
+    errors_key, eval_metric_ops_key = get_key_errors_and_metrics(label_sequences, predictions, target_pm)
+    errors_label, eval_metric_ops_label = get_label_errors_and_metrics(labels, predictions, target_pm)
     errors = {**errors_key, **errors_label}
     eval_metric_ops = {**eval_metric_ops_key, **eval_metric_ops_label}
     return errors, eval_metric_ops
