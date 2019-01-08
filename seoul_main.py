@@ -14,8 +14,8 @@ flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
 flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
 # flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')  # Currently not supported
-flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
-flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
+flags.DEFINE_integer('start_delay_secs', 5, 'Seconds not to evaluate after running this script.')
+flags.DEFINE_integer('throttle_secs', 5, 'Seconds not to evaluate after the previous evaluation.')
 
 # Optimizer flags
 flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
@@ -26,7 +26,7 @@ flags.DEFINE_string('model', None, 'Model to train (dnn, cnn, rnn, seq2seq, tran
 flags.DEFINE_string('target_keys', 'PM10,PM25', 'Labels to predict. Use comma for multiple keys.')
 flags.DEFINE_string('target_hours', '3,6,12,24', 'Hours to predict. Use comma for multiple hours.')
 flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
-flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolutional input embedding.')
+flags.DEFINE_bool('input_embedding', False, 'Whether to apply a 2-region convolutional input embedding.')
 # flags.DEFINE_string(  # Currently not supported
 #     'hparams_overrides', None,
 #     'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
@@ -39,7 +39,7 @@ def parse_string_by_commas(string):
 
 def main(unused_argv):
     # Load raw data
-    # df_pm = read_and_preprocess_pm.read_pm_dataset('/home/donghyeon/disk1/dataset/seoul/airkorea')
+    # df_pm = read_and_preprocess_pm.read_pm_dataset('data/airkorea')
 
     # Or instead save and load pickled data
     # df_pm.to_pickle('df_pm.pickle')
@@ -50,7 +50,6 @@ def main(unused_argv):
     df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
     # Make output values to predict
-    # target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], list(range(24, 24*7 + 1, 24)))
     target_keys = parse_string_by_commas(FLAGS.target_keys)
     target_hours = list(map(int, parse_string_by_commas(FLAGS.target_hours)))
     target_pm = TargetPM(target_keys, target_hours)

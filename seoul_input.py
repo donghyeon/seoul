@@ -122,6 +122,6 @@ def sliding_window_input_fn(features, labels, window_size, batch_size, num_epoch
     dataset = tf.data.Dataset.zip((dataset_features, dataset_labels))
 
     num_station, time_length = next(iter(features.values())).shape
-    num_data = num_station * (time_length - window_size + 1)
+    num_data_per_station = time_length - window_size + 1
 
-    return dataset.shuffle(1000).repeat(num_epochs).batch(batch_size)
+    return dataset.shuffle(num_data_per_station).repeat(num_epochs).batch(batch_size)
