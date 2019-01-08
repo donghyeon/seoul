@@ -25,11 +25,8 @@ def simple_cnn(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
-    
     inputs.set_shape([None, params['window_size'], input_dim])
 
     if params['conv_embedding']:
@@ -82,6 +79,10 @@ def simple_cnn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
+
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
 
@@ -118,11 +119,8 @@ def simple_dnn(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
-
     inputs.set_shape([None, params['window_size'], input_dim])
 
     if params['conv_embedding']:
@@ -148,6 +146,10 @@ def simple_dnn(features, labels, mode, params):
 
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
+
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
 
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
@@ -184,10 +186,8 @@ def simple_lstm(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
 
     if params['conv_embedding']:
         with tf.variable_scope('conv_embedding'):
@@ -218,6 +218,10 @@ def simple_lstm(features, labels, mode, params):
         if mode == tf.estimator.ModeKeys.PREDICT:
             return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
+        # Shape of targets: [batch_size, sequence_length, feature_dim]
+        targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+        targets = targets[:, -1]  # Discard values except for the last time step
+
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
         loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
@@ -244,6 +248,7 @@ def simple_lstm(features, labels, mode, params):
                                           eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
 
+# TODO: Support for all estimator modes
 def seq2seq(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
     feature_columns = params['feature_columns']
@@ -263,8 +268,9 @@ def seq2seq(features, labels, mode, params):
     # label_columns should be sorted when you use tf.feature_column.input_layer for labels
     label_sequences_columns = sorted(label_sequences_columns, key=lambda x: x.name)
 
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
     targets, targets_sequence_length = tf.contrib.feature_column.sequence_input_layer(label_sequences,
                                                                                       label_sequences_columns)
 
@@ -388,6 +394,7 @@ def _transform_labels_to_sequences(labels, target_pm, features_mean, features_st
     return label_sequences, label_sequences_columns
 
 
+# TODO: Support for all estimator modes
 def transformer(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
     feature_columns = params['feature_columns']
