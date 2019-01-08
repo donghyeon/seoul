@@ -124,4 +124,4 @@ def sliding_window_input_fn(features, labels, window_size, batch_size, num_epoch
     num_station, time_length = next(iter(features.values())).shape
     num_data_per_station = time_length - window_size + 1
 
-    return dataset.shuffle(num_data_per_station).repeat(num_epochs).batch(batch_size)
+    return dataset.shuffle(num_data_per_station).repeat(num_epochs).batch(batch_size).prefetch(1)
