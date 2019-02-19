@@ -14,8 +14,8 @@ flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
 flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
 # flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')  # Currently not supported
-flags.DEFINE_integer('start_delay_secs', 60, 'Seconds not to evaluate after running this script.')
-flags.DEFINE_integer('throttle_secs', 60, 'Seconds not to evaluate after the previous evaluation.')
+flags.DEFINE_integer('start_delay_secs', 10, 'Seconds not to evaluate after running this script.')
+flags.DEFINE_integer('throttle_secs', 10, 'Seconds not to evaluate after the previous evaluation.')
 
 # Optimizer flags
 flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
@@ -31,6 +31,9 @@ flags.DEFINE_bool('input_embedding', True, 'Whether to apply a 2-region convolut
 #     'hparams_overrides', None,
 #     'Hyperparameter overrides, represented as a string containing comma-separated hparam_name=value pairs.')
 FLAGS = flags.FLAGS
+
+#def validate_flags(flags_obj):
+
 
 
 def parse_string_by_commas(string):
@@ -50,7 +53,6 @@ def main(unused_argv):
     df_pm = read_and_preprocess_pm.treat_nan_by_fill_methods(df_pm)
 
     # Make output values to predict
-    # target_pm = TargetPM([TargetPM.PM10, TargetPM.PM25], list(range(24, 24*7 + 1, 24)))
     target_keys = parse_string_by_commas(FLAGS.target_keys)
     target_hours = list(map(int, parse_string_by_commas(FLAGS.target_hours)))
     target_pm = TargetPM(target_keys, target_hours)
@@ -108,7 +110,8 @@ def main(unused_argv):
               'learning_rate': FLAGS.learning_rate,
               'conv_embedding': FLAGS.input_embedding,
               'day_region_start_hour': 24, 'day_region_num_layer': 1,
-              'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4}
+              'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4,
+              'sequence_length': len(target_pm.hours)}
 
     model_fn_dict = {'dnn': seoul_model.simple_dnn,
                      'cnn': seoul_model.simple_cnn,

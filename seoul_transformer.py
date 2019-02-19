@@ -5,30 +5,15 @@ from official.transformer.model import model_utils
 
 _NEG_INF = -1e9
 
-class SeoulEmbeddingLayer(tf.layers.Layer):
-    def __init__(self, hidden_size):
-        super(SeoulEmbeddingLayer, self).__init__()
-        self.hidden_size = hidden_size
-
-    def build(self, _):
-        with tf.variable_scope("embedding", reuse=tf.AUTO_REUSE):
-            self.embedding_layer = tf.layers.Dense(self.hidden_size, name='embedding_layer')
-
-        self.built = True
-
-    def call(self, x):
-        with tf.name_scope("embedding"):
-            return self.embedding_layer(x)
-
 
 class SeoulTransformer(object):
     def __init__(self, params, train):
         self.train = train
         self.params = params
 
-        self.encoder_embedding_layer = SeoulEmbeddingLayer(params['hidden_size'])
-        self.decoder_embedding_layer = SeoulEmbeddingLayer(params['hidden_size'])
-        self.output_embedding_layer = SeoulEmbeddingLayer(params['output_size'])
+        self.encoder_embedding_layer = tf.keras.layers.Dense(params['hidden_size'], name='encoder_embedding_layer')
+        self.decoder_embedding_layer = tf.keras.layers.Dense(params['hidden_size'], name='decoder_embedding_layer')
+        self.output_embedding_layer = tf.keras.layers.Dense(params['output_size'], name='output_embedding_layer')
 
         self.encoder_stack = EncoderStack(params, train)
         self.decoder_stack = DecoderStack(params, train)
@@ -89,7 +74,38 @@ class SeoulTransformer(object):
             return outputs
 
     def predict(self, encoder_outputs, encoder_decoder_attention_bias):
-        pass
+        """Return predicted sequence."""
+        with tf.name_scope('decode'):
+            batch_size = tf.shape(encoder_outputs)[0]
+            max_decode_length = self.params['sequence_length']
+            timing_signal = model_utils.get_position_encoding(max_decode_length, self.params['hidden_size'])
+            decoder_self_attention_bias = model_utils.get_decoder_self_attention_bias(max_decode_length)
+
+            # Create cache storing decoder attention values for each layer.
+            cache = {
+                'layer_%d' % layer: {
+                    'k': tf.zeros([batch_size, 0, self.params['hidden_size']]),
+                    'v': tf.zeros([batch_size, 0, self.params['hidden_size']])
+                } for layer in range(self.params['num_hidden_layers'])}
+
+            # Add encoder output and attention bias to the cache.
+            cache['encoder_outputs'] = encoder_outputs
+            cache['encoder_decoder_attention_bias'] = encoder_decoder_attention_bias
+
+            # Forward decoder_inputs to decoder_stack max_decode_length times instead of applying beam search.
+            decoder_inputs = encoder_outputs[:, -1:, :]
+            decoder_outputs = tf.zeros([batch_size, 0, self.params['hidden_size']])
+            for i in range(max_decode_length):
+                decoder_inputs += timing_signal[i:i + 1]
+                self_attention_bias = decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
+                decoder_inputs = self.decoder_stack(
+                    decoder_inputs, cache.get('encoder_outputs'), self_attention_bias,
+                    cache.get('encoder_decoder_attention_bias'), cache)
+                decoder_outputs = tf.concat([decoder_outputs, decoder_inputs], axis=1)
+
+            # Get the target outputs
+            outputs = self.output_embedding_layer(decoder_outputs)
+        return outputs
 
 
 def seoul_get_padding(x):

@@ -501,7 +501,10 @@ def transformer(features, labels, mode, params):
 
     with tf.variable_scope("transformer"):
         model = seoul_transformer.SeoulTransformer(params, mode == tf.estimator.ModeKeys.TRAIN)
-        outputs = model(inputs, targets)
+        if mode == tf.estimator.ModeKeys.TRAIN:
+            outputs = model(inputs, targets)
+        else:
+            outputs = model(inputs, None)
 
     predictions = {}
     # predictions of key sequences
