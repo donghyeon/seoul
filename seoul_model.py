@@ -25,11 +25,8 @@ def simple_cnn(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
-    
     inputs.set_shape([None, params['window_size'], input_dim])
 
     if params['conv_embedding']:
@@ -82,20 +79,14 @@ def simple_cnn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
+
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
 
-    errors = {}
-    eval_metric_ops = {}
-    # errors of all label columns
-    for i, column in enumerate(label_columns):
-        column_name = column.name
-        key, hour = target_pm.get_key_hour_from_column_name(column_name)
-        errors[column_name] = _compute_mean_absolute_error(
-            labels=labels[column_name][:, -1], predictions=predictions[column_name])
-        eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-            labels=labels[column_name][:, -1], predictions=predictions[column_name])
-        
+    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -128,11 +119,8 @@ def simple_dnn(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
-
     inputs.set_shape([None, params['window_size'], input_dim])
 
     if params['conv_embedding']:
@@ -159,20 +147,14 @@ def simple_dnn(features, labels, mode, params):
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
+    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+    targets = targets[:, -1]  # Discard values except for the last time step
+
     loss = tf.losses.mean_squared_error(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.001)
 
-    errors = {}
-    eval_metric_ops = {}
-    # errors of all label columns
-    for i, column in enumerate(label_columns):
-        column_name = column.name
-        key, hour = target_pm.get_key_hour_from_column_name(column_name)
-        errors[column_name] = _compute_mean_absolute_error(
-            labels=labels[column_name][:, -1], predictions=predictions[column_name])
-        eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-            labels=labels[column_name][:, -1], predictions=predictions[column_name])
-
+    errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
     _add_summary_training_errors(errors)
     
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -204,10 +186,8 @@ def simple_lstm(features, labels, mode, params):
     label_columns = sorted(label_columns, key=lambda x: x.name)
 
     # features and labels (dict): {label_column: [batch_size, sequence_length(input)]}
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
-    targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
-    targets = targets[:, -1]  # Discard values except for the last time step
 
     if params['conv_embedding']:
         with tf.variable_scope('conv_embedding'):
@@ -238,23 +218,14 @@ def simple_lstm(features, labels, mode, params):
         if mode == tf.estimator.ModeKeys.PREDICT:
             return tf.estimator.EstimatorSpec(mode, predictions=predictions)
 
+        # Shape of targets: [batch_size, sequence_length, feature_dim]
+        targets, _ = tf.contrib.feature_column.sequence_input_layer(labels, label_columns)
+        targets = targets[:, -1]  # Discard values except for the last time step
+
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
         loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-        errors = {}
-        eval_metric_ops = {}
-        # errors of all label columns
-        for i, column in enumerate(label_columns):
-            column_name = column.name
-            key, hour = TargetPM.get_key_hour_from_column_name(column_name)
-            errors[column_name] = _compute_mean_absolute_error(
-                labels=labels[column_name][:, -1], predictions=predictions[column_name])
-            eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-                labels=labels[column_name][:, -1], predictions=predictions[column_name])
-
-        for column_name in errors:
-            key, hour = TargetPM.get_key_hour_from_column_name(column_name)
-
+        errors, eval_metric_ops = get_label_errors_and_metrics(labels, predictions, target_pm)
         _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
@@ -277,6 +248,7 @@ def simple_lstm(features, labels, mode, params):
                                           eval_metric_ops=eval_metric_ops, training_hooks=[logging_hook])
 
 
+# TODO: Support for all estimator modes
 def seq2seq(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
     feature_columns = params['feature_columns']
@@ -296,8 +268,9 @@ def seq2seq(features, labels, mode, params):
     # label_columns should be sorted when you use tf.feature_column.input_layer for labels
     label_sequences_columns = sorted(label_sequences_columns, key=lambda x: x.name)
 
-    # Shape of inputs and targets: [batch_size, sequence_length, feature_dim]
+    # Shape of inputs: [batch_size, sequence_length, feature_dim]
     inputs, _ = tf.contrib.feature_column.sequence_input_layer(features, feature_columns)
+    # Shape of targets: [batch_size, sequence_length, feature_dim]
     targets, targets_sequence_length = tf.contrib.feature_column.sequence_input_layer(label_sequences,
                                                                                       label_sequences_columns)
 
@@ -382,25 +355,7 @@ def seq2seq(features, labels, mode, params):
         loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
         loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-        errors = {}
-        eval_metric_ops = {}
-        # errors of key sequences
-        for i, column in enumerate(label_sequences_columns):
-            column_name = column.name
-            errors[column_name] = _compute_mean_absolute_error(
-                labels=label_sequences[column_name], predictions=predictions[column_name])
-            eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-                labels=label_sequences[column_name], predictions=predictions[column_name])
-        # errors of all label columns
-        for i, column in enumerate(label_sequences_columns):
-            key = column.name
-            for j, hour in enumerate(target_pm.hours):
-                column_name = target_pm.get_label_column_name(key, hour)
-                errors[column_name] = _compute_mean_absolute_error(
-                    labels=labels[column_name][:, -1], predictions=predictions[column_name])
-                eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-                    labels=labels[column_name][:, -1], predictions=predictions[column_name])
-
+        errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm)
         _add_summary_training_errors(errors)
 
         if mode == tf.estimator.ModeKeys.EVAL:
@@ -438,36 +393,7 @@ def _transform_labels_to_sequences(labels, target_pm, features_mean, features_st
     return label_sequences, label_sequences_columns
 
 
-def _standardize(dataset, mean, stddev):
-    if np.isclose(stddev, 0):
-        return dataset - mean
-    return (dataset - mean) / stddev
-
-
-def _inverse_standardize(standardized_dataset, mean, stddev):
-    if np.isclose(stddev, 0):
-        return standardized_dataset + mean
-    return standardized_dataset * stddev + mean
-
-
-def _compute_mean_absolute_error(labels, predictions):
-    return tf.reduce_mean(tf.abs(labels - predictions))
-
-
-def _add_summary_training_errors(errors):
-    for column_name in errors:
-        key = column_name.split('_')[0]
-        tf.summary.scalar('%s/%sh' % (key, column_name), errors[column_name])
-
-
-def add_l2_loss(variables, scale_factor):
-    l2_loss = 0
-    for v in variables:
-        if 'bias' not in v.name.lower():
-            l2_loss += scale_factor * tf.nn.l2_loss(v)
-    return l2_loss
-
-
+# TODO: Support for all estimator modes
 def transformer(features, labels, mode, params):
     features_mean, features_stddev = params['features_statistics']
     feature_columns = params['feature_columns']
@@ -528,25 +454,7 @@ def transformer(features, labels, mode, params):
     loss = tf.losses.absolute_difference(labels=targets, predictions=outputs)
     loss += add_l2_loss(tf.trainable_variables(), scale_factor=0.0001)
 
-    errors = {}
-    eval_metric_ops = {}
-    # errors of key sequences
-    for i, column in enumerate(label_sequences_columns):
-        column_name = column.name
-        errors[column_name] = _compute_mean_absolute_error(
-            labels=label_sequences[column_name], predictions=predictions[column_name])
-        eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-            labels=label_sequences[column_name], predictions=predictions[column_name])
-    # errors of all label columns
-    for i, column in enumerate(label_sequences_columns):
-        key = column.name
-        for j, hour in enumerate(target_pm.hours):
-            column_name = target_pm.get_label_column_name(key, hour)
-            errors[column_name] = _compute_mean_absolute_error(
-                labels=labels[column_name][:, -1], predictions=predictions[column_name])
-            eval_metric_ops[column_name] = tf.metrics.mean_absolute_error(
-                labels=labels[column_name][:, -1], predictions=predictions[column_name])
-            
+    errors, eval_metric_ops = get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm)
     _add_summary_training_errors(errors)
 
     if mode == tf.estimator.ModeKeys.EVAL:
@@ -629,3 +537,69 @@ def combined_static_and_dynamic_shape(tensor):
         else:
             combined_shape.append(dynamic_tensor_shape[index])
     return combined_shape
+
+
+def get_key_errors_and_metrics(label_sequences, predictions, target_pm):
+    errors = {}
+    eval_metric_ops = {}
+    # errors of key sequences
+    for i, key in enumerate(target_pm.keys):
+        label_key = '{}/Avg'.format(key)
+        errors[label_key] = _compute_mean_absolute_error(
+            labels=label_sequences[key], predictions=predictions[key])
+        eval_metric_ops[label_key] = tf.metrics.mean_absolute_error(
+            labels=label_sequences[key], predictions=predictions[key])
+    return errors, eval_metric_ops
+
+
+def get_label_errors_and_metrics(labels, predictions, target_pm):
+    errors = {}
+    eval_metric_ops = {}
+    # errors of all label columns
+    for i, key in enumerate(target_pm.keys):
+        for j, hour in enumerate(target_pm.hours):
+            column_name = target_pm.get_label_column_name(key, hour)
+            label_key = '{}/{}h'.format(key, hour)
+            errors[label_key] = _compute_mean_absolute_error(
+                labels=labels[column_name][:, -1], predictions=predictions[column_name])
+            eval_metric_ops[label_key] = tf.metrics.mean_absolute_error(
+                labels=labels[column_name][:, -1], predictions=predictions[column_name])
+    return errors, eval_metric_ops
+
+
+# TODO: Remove target_pm dependency
+def get_all_errors_and_metrics(labels, label_sequences, predictions, target_pm):
+    errors_key, eval_metric_ops_key = get_key_errors_and_metrics(label_sequences, predictions, target_pm)
+    errors_label, eval_metric_ops_label = get_label_errors_and_metrics(labels, predictions, target_pm)
+    errors = {**errors_key, **errors_label}
+    eval_metric_ops = {**eval_metric_ops_key, **eval_metric_ops_label}
+    return errors, eval_metric_ops
+
+
+def _add_summary_training_errors(errors):
+    for label_key in errors:
+        tf.summary.scalar(label_key, errors[label_key])
+
+
+def _standardize(dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return dataset - mean
+    return (dataset - mean) / stddev
+
+
+def _inverse_standardize(standardized_dataset, mean, stddev):
+    if np.isclose(stddev, 0):
+        return standardized_dataset + mean
+    return standardized_dataset * stddev + mean
+
+
+def _compute_mean_absolute_error(labels, predictions):
+    return tf.reduce_mean(tf.abs(labels - predictions))
+
+
+def add_l2_loss(variables, scale_factor):
+    l2_loss = 0
+    for v in variables:
+        if 'bias' not in v.name.lower():
+            l2_loss += scale_factor * tf.nn.l2_loss(v)
+    return l2_loss
