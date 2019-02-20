@@ -18,7 +18,7 @@ class SeoulTransformer(object):
         self.encoder_stack = EncoderStack(params, train)
         self.decoder_stack = DecoderStack(params, train)
 
-    def __call__(self, inputs, targets):
+    def __call__(self, inputs, start_tokens, targets=None):
         initializer = tf.variance_scaling_initializer(
             self.params["initializer_gain"], mode="fan_avg", distribution="uniform")
         with tf.variable_scope("Transformer", initializer=initializer):
@@ -26,9 +26,9 @@ class SeoulTransformer(object):
             encoder_outputs = self.encode(inputs, attention_bias)
 
             if targets is None:
-                return self.predict(encoder_outputs, attention_bias)
+                return self.predict(start_tokens, encoder_outputs, attention_bias)
             else:
-                outputs = self.decode(targets, encoder_outputs, attention_bias)
+                outputs = self.decode(start_tokens, targets, encoder_outputs, attention_bias)
                 return outputs
 
     def encode(self, inputs, attention_bias):
@@ -50,12 +50,11 @@ class SeoulTransformer(object):
 
             return self.encoder_stack(encoder_inputs, attention_bias, inputs_padding)
 
-    def decode(self, targets, encoder_outputs, attention_bias):
+    def decode(self, start_tokens, targets, encoder_outputs, attention_bias):
         with tf.name_scope("decode"):
-            decoder_inputs = self.decoder_embedding_layer(targets)
             with tf.name_scope("shift_targets"):
-                decoder_inputs = tf.concat(
-                    [encoder_outputs[:, -1:, :], decoder_inputs[:, :-1, :]], axis=1)
+                decoder_inputs = tf.concat([start_tokens, targets[:, :-1]], axis=1)
+                decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
             with tf.name_scope("add_pos_encoding"):
                 length = tf.shape(decoder_inputs)[1]
                 decoder_inputs += model_utils.get_position_encoding(
@@ -73,7 +72,7 @@ class SeoulTransformer(object):
             outputs = self.output_embedding_layer(decoder_outputs)
             return outputs
 
-    def predict(self, encoder_outputs, encoder_decoder_attention_bias):
+    def predict(self, start_tokens, encoder_outputs, encoder_decoder_attention_bias):
         """Return predicted sequence."""
         with tf.name_scope('decode'):
             batch_size = tf.shape(encoder_outputs)[0]
@@ -93,11 +92,10 @@ class SeoulTransformer(object):
             cache['encoder_decoder_attention_bias'] = encoder_decoder_attention_bias
 
             # Forward decoder_inputs to decoder_stack max_decode_length times instead of applying beam search.
-            decoder_inputs = encoder_outputs[:, -1:, :]
             decoder_outputs = tf.zeros([batch_size, 0, self.params['output_size']])
+            decoder_inputs = start_tokens
             for i in range(max_decode_length):
-                if i > 0:
-                    decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
+                decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
                 decoder_inputs += timing_signal[i:i + 1]
                 self_attention_bias = decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
                 decoder_inputs = self.decoder_stack(

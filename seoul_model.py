@@ -415,6 +415,10 @@ def transformer(features, labels, mode, params):
     targets, targets_sequence_length = tf.contrib.feature_column.sequence_input_layer(label_sequences,
                                                                                       label_sequences_columns)
 
+    # start tokens like a <GO> symbol
+    start_tokens, _ = tf.contrib.feature_column.sequence_input_layer(features, label_sequences_columns)
+    start_tokens = start_tokens[:, -1]  # Discard values except for the last time step
+
     if params['conv_embedding']:
         with tf.variable_scope('conv_embedding'):
             large_inputs_embedder = SeoulLargeInputsEmbedder(
@@ -428,9 +432,9 @@ def transformer(features, labels, mode, params):
     with tf.variable_scope("transformer"):
         model = seoul_transformer.SeoulTransformer(params, mode == tf.estimator.ModeKeys.TRAIN)
         if mode == tf.estimator.ModeKeys.TRAIN:
-            outputs = model(inputs, targets)
+            outputs = model(inputs, start_tokens, targets)
         else:
-            outputs = model(inputs, None)
+            outputs = model(inputs, start_tokens, None)
 
     predictions = {}
     # predictions of key sequences
