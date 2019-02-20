@@ -53,8 +53,8 @@ class SeoulTransformer(object):
     def decode(self, start_tokens, targets, encoder_outputs, attention_bias):
         with tf.name_scope("decode"):
             with tf.name_scope("shift_targets"):
-                decoder_inputs = tf.concat([start_tokens, targets[:, :-1]], axis=1)
-                decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
+                decoder_inputs = tf.concat([tf.expand_dims(start_tokens, axis=1), targets[:, :-1]], axis=1)
+            decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
             with tf.name_scope("add_pos_encoding"):
                 length = tf.shape(decoder_inputs)[1]
                 decoder_inputs += model_utils.get_position_encoding(
@@ -93,7 +93,7 @@ class SeoulTransformer(object):
 
             # Forward decoder_inputs to decoder_stack max_decode_length times instead of applying beam search.
             decoder_outputs = tf.zeros([batch_size, 0, self.params['output_size']])
-            decoder_inputs = start_tokens
+            decoder_inputs = tf.expand_dims(start_tokens, axis=1)
             for i in range(max_decode_length):
                 decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
                 decoder_inputs += timing_signal[i:i + 1]
