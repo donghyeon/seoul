@@ -94,18 +94,18 @@ class SeoulTransformer(object):
 
             # Forward decoder_inputs to decoder_stack max_decode_length times instead of applying beam search.
             decoder_inputs = encoder_outputs[:, -1:, :]
-            decoder_outputs = tf.zeros([batch_size, 0, self.params['hidden_size']])
+            decoder_outputs = tf.zeros([batch_size, 0, self.params['output_size']])
             for i in range(max_decode_length):
+                if i > 0:
+                    decoder_inputs = self.decoder_embedding_layer(decoder_inputs)
                 decoder_inputs += timing_signal[i:i + 1]
                 self_attention_bias = decoder_self_attention_bias[:, :, i:i + 1, :i + 1]
                 decoder_inputs = self.decoder_stack(
                     decoder_inputs, cache.get('encoder_outputs'), self_attention_bias,
                     cache.get('encoder_decoder_attention_bias'), cache)
+                decoder_inputs = self.output_embedding_layer(decoder_inputs)
                 decoder_outputs = tf.concat([decoder_outputs, decoder_inputs], axis=1)
-
-            # Get the target outputs
-            outputs = self.output_embedding_layer(decoder_outputs)
-        return outputs
+        return decoder_outputs
 
 
 def seoul_get_padding(x):
