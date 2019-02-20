@@ -11,11 +11,12 @@ import seoul_model
 
 # Estimator flags
 flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
-flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
+flags.DEFINE_integer('save_checkpoints_steps', 100, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
 # flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')  # Currently not supported
 flags.DEFINE_integer('start_delay_secs', 5, 'Seconds not to evaluate after running this script.')
 flags.DEFINE_integer('throttle_secs', 5, 'Seconds not to evaluate after the previous evaluation.')
+flags.DEFINE_bool('evaluate_once', False, 'Whether to evaluate saved model once.')
 
 # Optimizer flags
 flags.DEFINE_float('learning_rate', 1e-3, 'Learning rate of an optimizer.')
@@ -25,7 +26,7 @@ flags.DEFINE_integer('batch_size', 128, 'Number of examples in a batch')
 flags.DEFINE_string('model', None, 'Model to train (dnn, cnn, rnn, seq2seq, transformer).')
 flags.DEFINE_string('target_keys', 'PM10,PM25', 'Labels to predict. Use comma for multiple keys.')
 flags.DEFINE_string('target_hours', '3,6,12,24', 'Hours to predict. Use comma for multiple hours.')
-flags.DEFINE_integer('window_size', 24 * 9, 'Window size of a sliding window input function.')
+flags.DEFINE_integer('window_size', 24, 'Window size of a sliding window input function.')
 flags.DEFINE_bool('input_embedding', False, 'Whether to apply a 2-region convolutional input embedding.')
 # flags.DEFINE_string(  # Currently not supported
 #     'hparams_overrides', None,
@@ -124,12 +125,22 @@ def main(unused_argv):
                 'num_hidden_layers': 6, 'filter_size': 64})
 
     # Let's train and evaluate
-    train_spec = tf.estimator.TrainSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
-        features_train, labels_train, FLAGS.window_size, FLAGS.batch_size, FLAGS.num_epochs))
-    eval_spec = tf.estimator.EvalSpec(input_fn=lambda: seoul_input.sliding_window_input_fn(
-        features_eval, labels_eval, FLAGS.window_size, FLAGS.batch_size, 1),
-        start_delay_secs=FLAGS.start_delay_secs, throttle_secs=FLAGS.throttle_secs)
-    tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
+    def train_input_fn():
+        return seoul_input.sliding_window_input_fn(
+            features_train, labels_train, FLAGS.window_size, FLAGS.batch_size, FLAGS.num_epochs)
+
+    def eval_input_fn():
+        return seoul_input.sliding_window_input_fn(
+            features_eval, labels_eval, FLAGS.window_size, FLAGS.batch_size, 1)
+
+    if FLAGS.evaluate_once:
+        seoul_regressor.evaluate(eval_input_fn)
+    else:
+        train_spec = tf.estimator.TrainSpec(input_fn=train_input_fn)
+        eval_spec = tf.estimator.EvalSpec(input_fn=eval_input_fn,
+                                          start_delay_secs=FLAGS.start_delay_secs,
+                                          throttle_secs=FLAGS.throttle_secs)
+        tf.estimator.train_and_evaluate(seoul_regressor, train_spec, eval_spec)
 
 
 if __name__ == '__main__':
