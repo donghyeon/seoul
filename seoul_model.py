@@ -563,7 +563,7 @@ def get_label_errors_and_metrics(labels, predictions, target_pm):
     for i, key in enumerate(target_pm.keys):
         for j, hour in enumerate(target_pm.hours):
             column_name = target_pm.get_label_column_name(key, hour)
-            label_key = '{}/{}h'.format(key, hour)
+            label_key = '{}/{:03d}h'.format(key, hour)
             errors[label_key] = _compute_mean_absolute_error(
                 labels=labels[column_name][:, -1], predictions=predictions[column_name])
             eval_metric_ops[label_key] = tf.metrics.mean_absolute_error(
