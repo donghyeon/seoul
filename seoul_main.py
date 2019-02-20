@@ -11,7 +11,7 @@ import seoul_model
 
 # Estimator flags
 flags.DEFINE_string('model_dir', None, 'Path to output model directory.')
-flags.DEFINE_integer('save_checkpoints_steps', 100, 'Steps to save a checkpoint.')
+flags.DEFINE_integer('save_checkpoints_steps', 1000, 'Steps to save a checkpoint.')
 flags.DEFINE_integer('num_epochs', 10, 'Number of train epochs.')
 # flags.DEFINE_integer('num_train_steps', None, 'Number of train steps.')  # Currently not supported
 flags.DEFINE_integer('start_delay_secs', 5, 'Seconds not to evaluate after running this script.')
