@@ -77,10 +77,8 @@ def main(unused_argv):
     features_train, labels_train, feature_columns, label_columns = seoul_input.prepare_tf_dataset(df_features_train, df_labels_train)
     features_eval, labels_eval, _, _ = seoul_input.prepare_tf_dataset(df_features_eval, df_labels_eval)
 
-    # hyper-parameters for encoder
-    num_encoder_states = [64]
-
     # hyper-parameters for seq2seq
+    num_encoder_states = [64]
     num_decoder_states = [64]
 
     # TODO: Add FLAGS validator
@@ -89,11 +87,35 @@ def main(unused_argv):
         current_time_string = time.strftime('%y%m%d_%H%M%S', time.localtime())
         print('FLAGS.model_dir was not set. Current time will be used as a model directory.')
         FLAGS.model_dir = current_time_string
-    # TODO: Add an exception when user want to evaluate a pretrained model from FLAGS.model_dir
     # Set model as rnn if it was not set.
     if FLAGS.model is None:
         print('FLAGS.model was not set. Simple RNN is used for this training.')
         FLAGS.model = 'rnn'
+
+    # Set hyperparameters
+    params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
+              'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features_train),
+              'batch_size': FLAGS.batch_size, 'window_size': FLAGS.window_size,
+              'learning_rate': FLAGS.learning_rate}
+    seq2seq_params = {'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states}
+    transformer_params = {'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
+                          'num_heads': 4, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
+                          'num_hidden_layers': 1, 'filter_size': 64}
+    input_embedding_params = {'conv_embedding': FLAGS.input_embedding,
+                              'day_region_start_hour': 24, 'day_region_num_layer': 1,
+                              'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4,
+                              'sequence_length': len(target_pm.hours)}
+
+    model_fn_dict = {'dnn': seoul_model.simple_dnn,
+                     'cnn': seoul_model.simple_cnn,
+                     'rnn': seoul_model.simple_lstm,
+                     'seq2seq': seoul_model.seq2seq,
+                     'transformer': seoul_model.transformer}
+    model_params = {'dnn': {},
+                    'cnn': {},
+                    'rnn': seq2seq_params,
+                    'seq2seq': seq2seq_params,
+                    'transformer': transformer_params}
 
     # Define an estimator object
     tf.logging.set_verbosity(tf.logging.INFO)
@@ -101,28 +123,9 @@ def main(unused_argv):
     run_config = tf.estimator.RunConfig(model_dir=FLAGS.model_dir,
                                         session_config=session_config,
                                         save_checkpoints_steps=FLAGS.save_checkpoints_steps)
-    params = {'target_pm': target_pm, 'feature_columns': feature_columns, 'label_columns': label_columns,
-              'features_statistics': read_and_preprocess_pm.get_statistics_for_standardization(df_features_train),
-              'batch_size': FLAGS.batch_size, 'window_size': FLAGS.window_size,
-              'num_encoder_states': num_encoder_states, 'num_decoder_states': num_decoder_states,
-              'learning_rate': FLAGS.learning_rate,
-              'conv_embedding': FLAGS.input_embedding,
-              'day_region_start_hour': 24, 'day_region_num_layer': 1,
-              'week_region_start_hour': 24 * 9, 'week_region_num_layer': 4,
-              'sequence_length': len(target_pm.hours)}
-
-    model_fn_dict = {'dnn': seoul_model.simple_dnn,
-                     'cnn': seoul_model.simple_cnn,
-                     'rnn': seoul_model.simple_lstm,
-                     'seq2seq': seoul_model.seq2seq,
-                     'transformer': seoul_model.transformer}
-
     seoul_regressor = tf.estimator.Estimator(
         model_fn=model_fn_dict[FLAGS.model], config=run_config,
-        params={**params,
-                'initializer_gain': 1.0, 'hidden_size': 64, 'layer_postprocess_dropout': 0.1,
-                'num_heads': 8, 'attention_dropout': 0.1, 'relu_dropout': 0.1, 'allow_ffn_pad': True,
-                'num_hidden_layers': 6, 'filter_size': 64})
+        params={**params, **model_params[FLAGS.model], **input_embedding_params})
 
     # Let's train and evaluate
     def train_input_fn():
